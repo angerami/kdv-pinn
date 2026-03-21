@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from physics import kdv
+
 
 def _init_interactive_plot():
     try:
@@ -12,6 +14,8 @@ def _init_interactive_plot():
         return None, None
 
 def _update_interactive_plot(model, input_eval, config, metrics):
+    from IPython.display import clear_output, display
+    import matplotlib.pyplot as plt
     model.eval()
     with torch.no_grad():
         clear_output(wait=True)
@@ -27,7 +31,8 @@ def plot_results(model, input_eval, config, metrics, filename=None):
     # Loss plot
     ax_loss = fig.add_subplot(321)
     ax_loss.semilogy(metrics['L_total'], label='$L_{total}$')
-    ax_loss.semilogy(metrics['L_B'], label='$L_{B}$')
+    ax_loss.semilogy(metrics['L_kdv'], label='$L_{kdv}$')
+    ax_loss.semilogy(metrics['L_BC'], label='$L_{BC}$')
     ax_loss.set_xlabel('Epoch')
     ax_loss.set_ylabel('Loss')
     ax_loss.legend()
@@ -82,9 +87,9 @@ def plot_results(model, input_eval, config, metrics, filename=None):
 def plot_2D_field(ax_field, u_reshaped, config, title='u(x,t)', show_colorbar=True):
     T = getattr(config, 'T', 1.0)
     L = config.L
+    aspect_ratio = (2 * L) / T
     im1 = ax_field.imshow(u_reshaped, extent=[-L, L, 0, T],
-                            vmin=config.vmin, vmax=config.vmax,
-                            origin='lower', cmap='coolwarm', aspect='auto')
+                            origin='lower', cmap='coolwarm', aspect=aspect_ratio)
     ax_field.set_title(title)
     ax_field.set_xlabel('x')
     ax_field.set_ylabel('t')
@@ -92,11 +97,10 @@ def plot_2D_field(ax_field, u_reshaped, config, title='u(x,t)', show_colorbar=Tr
         plt.colorbar(im1, ax=ax_field)
     return im1
 
-def plot_field_visualization(model, input_eval, config, view='res', filename=None):
-    results = kdv(model(input_eval), input_eval)
+def plot_field_visualization(results, config, view='res', filename=None):
     field_quantities = []
     if view == 'res':
-        field_quantities = ['res_kvd', 'res_H0', 'res_H1']
+        field_quantities = ['res_kdv', 'res_H0', 'res_H1']
     elif view == 'deriv':
         field_quantities = ['u', 'u_t', 'u_x', 'u_xx', 'u_xxx']
     elif view == 'iom':
@@ -104,19 +108,51 @@ def plot_field_visualization(model, input_eval, config, view='res', filename=Non
     elif view == 'curr':
         field_quantities = ['u', 'J_0', 'rho_1', 'J_1']
 
-    num_rows = 2
-    num_cols = 2 if len(field_quantities) == 4 else 3
+    # Determine layout based on number of plots
+    n_plots = len(field_quantities)
+    if n_plots == 3:
+        num_rows, num_cols = 1, 3
+        figsize = (15, 4)
+    elif n_plots == 4:
+        num_rows, num_cols = 2, 2
+        figsize = (10, 8)
+    elif n_plots in [5, 6]:
+        num_rows, num_cols = 2, 3
+        figsize = (15, 8)
+    else:
+        num_rows, num_cols = 2, 3
+        figsize = (15, 8)
 
-    num_points = int(np.sqrt(input_eval.shape[0]))
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(12, 10))
+    # Get grid size from first field
+    first_field = results[field_quantities[0]]
+    num_points = int(np.sqrt(first_field.shape[0]))
+
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
+    if num_rows == 1 and num_cols == 1:
+        axes = np.array([axes])
     axes = axes.flatten()
+    eqs, descs = load_equations(config.equation_file)
     for i, u_name in enumerate(field_quantities):
-        u = results[u_name].field.detach().cpu()
-        u_reshaped= u.reshape(num_points, num_points).numpy()
-        plot_2D_field(axes[i], u_reshaped, config, title=u_name, show_colorbar=True)
+        u = results[u_name].detach().cpu()
+        u_reshaped = u.reshape(num_points, num_points).numpy()
+        plot_2D_field(axes[i], u_reshaped, config, title=eqs[u_name], show_colorbar=True)
+
+    # Hide unused subplots
+    for i in range(n_plots, len(axes)):
+        axes[i].set_visible(False)
 
     plt.tight_layout()
     if filename:
         plt.savefig(filename, dpi=150, bbox_inches='tight')
         print(f"Saved plot to {filename}")
-    return fig
+
+def load_equations(md_path):
+    import re
+    text = open(md_path).read()
+    eqs = {}
+    for m in re.finditer(r'<!--\s*eq:(\w+)\s*-->.*?\n\$([^$]+)\$', text):
+        eqs[m.group(1)] = f'${m.group(2)}$'
+    descs = {}
+    for m in re.finditer(r'<!--\s*desc:(\w+)\s*-->\s*(.+)', text):
+        descs[m.group(1)] = m.group(2).strip()
+    return eqs, descs

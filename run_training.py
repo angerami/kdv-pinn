@@ -2,7 +2,7 @@ import argparse
 import torch
 from models import KdV_pinn
 from train import train_pinn
-from configuration import kdv_config
+from configuration import kdv_config, config_to_dict
 
 
 def main():
@@ -31,7 +31,7 @@ def main():
     torch.save({
         'model_state_dict': result['model'].state_dict(),
         'optimizer_state_dict': result['optimizer'].state_dict(),
-        'config': training_config,
+        'config': config_to_dict(training_config),
         'metrics': result['metrics']
     }, 'pinn_model.pt')
     print("Model saved to pinn_model.pt")

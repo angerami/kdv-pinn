@@ -1,4 +1,5 @@
 import torch
+from functools import partial
 
 def gradient(y, x):
     """Compute gradient of y with respect to x, handling edge cases."""
@@ -33,12 +34,12 @@ def kdv(u, input):
 
     # Conserved densities (free)
     rho_1 = 0.5 * u**2 #momentum
-    rho_2 = u**3 + 0.5 * u_x**2 #energy
+    rho_2 = -u**3 + 0.5 * u_x**2 #energy
     rho_3 = 2.5 * u**4 + 5 * u * u_x**2 + 0.5 * u_xx**2 #H_32
 
     # Conservation form flux
     J_0 = 3 * u**2 + u_xx
-    J_1 = 2 * u**3 + u * u_xx - 0.5 * u_x**2
+    J_1 = -4.5*u**4 - 3*u**2*u_xx + 6*u*u_x**2 + u_x*u_xxx - 0.5*u_xx**2
 
     J_0_x = gradient(J_0, input)[:, 1:2]
     J_1_x = gradient(J_1, input)[:, 1:2]
@@ -65,8 +66,47 @@ def kdv(u, input):
 
     return results
 
+def init_metrics():
+    base_keys = ['u', 'u_t', 'u_x', 'u_xx', 'u_xxx', 'rho_1', 'rho_2', 'rho_3', 'J_0', 'J_1', 'res_kdv', 'res_H0', 'res_H1']
+    return {f'mean_{k}': [] for k in base_keys}
 
 
+def compute_conserved_integrals(model, t_values, config, num_x_points=500, device='cpu'):
+    import numpy as np
+
+    model.eval()
+    model.to(device)
+
+    x = np.linspace(-config.L, config.L, num_x_points)
+    dx = x[1] - x[0]
+
+    H_0, H_1, H_2 = [], [], []
+
+    for t in t_values:
+        x_tensor = torch.tensor(x, dtype=torch.float32, device=device)
+        t_tensor = torch.ones_like(x_tensor) * t
+        input_tensor = torch.stack([t_tensor, x_tensor], dim=1)
+        input_tensor.requires_grad_(True)
+
+        u = model(input_tensor)
+        results = kdv(u, input_tensor)
+
+        # Integrate using trapezoidal rule
+        rho_0 = results['u'].detach().cpu().numpy().flatten()
+        rho_1 = results['rho_1'].detach().cpu().numpy().flatten()
+        rho_2 = results['rho_2'].detach().cpu().numpy().flatten()
+
+        H_0.append(np.trapz(rho_0, dx=dx))
+        H_1.append(np.trapz(rho_1, dx=dx))
+        H_2.append(np.trapz(rho_2, dx=dx))
+
+    return {
+        't_values': np.array(t_values),
+        'H_0': np.array(H_0),
+        'H_1': np.array(H_1),
+        'H_2': np.array(H_2)
+    }
+  
 
 ## KDV Soliton Solutions
 def kdv_soliton_sech(input, config):
@@ -82,8 +122,8 @@ def kdv_soliton_sech(input, config):
     # Argument: κ(x - vt - x₀)
     arg = kappa * (x - velocity * t - x0)
 
-    # Amplitude: -2κ²sech²(arg)
-    u = -2 * kappa**2 / (torch.cosh(arg)**2)
+    # Amplitude: 2κ²sech²(arg)
+    u = 2 * kappa**2 / (torch.cosh(arg)**2)
 
     return u
 
@@ -129,19 +169,15 @@ def gaussian_blob(input, config):
     x = input[:, 1:2]
 
     kappa = config.kappa
+    velocity = 4 * kappa**2
     x0 = config.x0
     # Argument: κ(x - vt - x₀)
-    arg = kappa * (x - x0)
-    u = -3 * torch.exp(-arg**2) * torch.exp(-t / config.T)
+    arg = kappa * (x - velocity * t - x0)
+    u = 3 * torch.exp(-arg**2)
     return u
 
 soliton_library = {
     'sech' : kdv_soliton_sech,
     'cn' : kdv_cnoidal_wave,
     'gauss' : gaussian_blob
-}
-
-
-
-    
-
+    }
