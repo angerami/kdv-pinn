@@ -22,7 +22,7 @@ kdv_config = SimpleNamespace(
     # Plotting parameters
     vmin=0,
     vmax=3,
-    equation_file='notes.md',
+    equation_file='equations.md',
     # Loss weights
     loss_types=['KDV', 'IC', 'BC'],
     lambda_KDV=1,
