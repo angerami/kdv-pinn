@@ -1,19 +1,32 @@
+"""Validation script for training and evaluating KdV PINN."""
+import os
 import torch
+import numpy as np
+import matplotlib.pyplot as plt
 from models import KdV_pinn
 from scattering import ScatteringData, SchrodingerSolver
 from train import train_pinn, pretrain
 from sampling import sample_bulk
-from configuration import kdv_config, config_to_dict, dict_to_config
+from configuration import kdv_config, config_to_dict
 from plot_utils import plot_field_visualization
 from physics import kdv
-import numpy as np
-import matplotlib.pyplot as plt
-import os
+
 
 def plot_scattering_validation(sd, kappa_rec, eigenvector_stack, tvals, output_dir, squared=True):
+    """Plot eigenfunction evolution and recovered wave numbers.
+
+    Args:
+        sd: ScatteringData object
+        kappa_rec: Recovered kappa values over time
+        eigenvector_stack: Time series of eigenfunctions
+        tvals: Time values
+        output_dir: Directory for saving plots
+        squared: If True, plot |ψ|², else plot ψ
+    """
     vmin, vmax = (0, 0.1) if squared else (-0.3, 0.3)
     label_suffix = '^2' if squared else ''
 
+    # Plot eigenfunctions
     fig = plt.figure(figsize=(12, 3))
     axes = []
 
@@ -38,6 +51,7 @@ def plot_scattering_validation(sd, kappa_rec, eigenvector_stack, tvals, output_d
     plt.savefig(f'{output_dir}/eigenvectors{suffix}.png', dpi=150, bbox_inches='tight')
     plt.close()
 
+    # Plot recovered kappas
     _, ax = plt.subplots(figsize=(8, 4))
     for idx in range(sd.Ns):
         line, = ax.plot(tvals[1:], kappa_rec[:, idx], label=f'$\\kappa_{{{idx}}}$ (recovered)')
@@ -50,7 +64,19 @@ def plot_scattering_validation(sd, kappa_rec, eigenvector_stack, tvals, output_d
     plt.savefig(f'{output_dir}/kappa_recovery.png', dpi=150, bbox_inches='tight')
     plt.close()
 
+
 def compute_metrics(sd, kappa_rec, results, results_ana):
+    """Compute validation metrics comparing PINN to analytic solution.
+
+    Args:
+        sd: ScatteringData object
+        kappa_rec: Recovered kappa values
+        results: PINN field results
+        results_ana: Analytic field results
+
+    Returns:
+        Dictionary of metrics
+    """
     kappa_metrics = {}
     for i in range(sd.Ns):
         kappa_mean = kappa_rec[:, i].mean()
@@ -67,15 +93,24 @@ def compute_metrics(sd, kappa_rec, results, results_ana):
             field_errors[f'{key}_mae'] = np.abs(diff).mean()
             field_errors[f'{key}_rmse'] = np.sqrt((diff**2).mean())
 
-    metrics = {
-        **kappa_metrics,
-        **field_errors
-    }
-    return metrics
+    return {**kappa_metrics, **field_errors}
+
 
 def validate_run(output_dir='validation_output'):
+    """Run complete validation: pretrain, train, and verify scattering data.
+
+    Performs a full training run on a multi-soliton problem, then validates
+    that the learned solution preserves scattering data (isospectrality).
+
+    Args:
+        output_dir: Directory for saving plots and results
+
+    Returns:
+        Dictionary of validation metrics
+    """
     os.makedirs(output_dir, exist_ok=True)
 
+    # Select device
     if torch.cuda.is_available():
         device = torch.device("cuda")
     elif torch.backends.mps.is_available():
@@ -91,7 +126,7 @@ def validate_run(output_dir='validation_output'):
     training_config.num_samp_eval = 128
     training_config.plot_interval = 50
     training_config.MLP = [2, 128, 128, 128, 1]
-    training_config.kappas = [1.8, 1.3, 1,0.7]
+    training_config.kappas = [1.8, 1.3, 1.0, 0.7]
     training_config.x0s = [8, 7, 5, 2]
     training_config.lr = 1e-3
     training_config.T = 1

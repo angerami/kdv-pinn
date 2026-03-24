@@ -1,3 +1,4 @@
+"""Plotting utilities for visualizing PINN training and results."""
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -5,17 +6,18 @@ from physics import kdv
 
 
 def _init_interactive_plot():
+    """Initialize IPython interactive plotting (for Jupyter notebooks)."""
     try:
         from IPython.display import clear_output, display
-        import matplotlib.pyplot as plt
         plt.ion()
         return clear_output, display
     except ImportError:
         return None, None
 
+
 def _update_interactive_plot(model, input_eval, config, metrics):
+    """Update interactive plot during training (for Jupyter notebooks)."""
     from IPython.display import clear_output, display
-    import matplotlib.pyplot as plt
     model.eval()
     with torch.no_grad():
         clear_output(wait=True)
@@ -23,8 +25,23 @@ def _update_interactive_plot(model, input_eval, config, metrics):
         display(fig)
         plt.close(fig)
     model.train()
-    
+
+
 def plot_results(model, input_eval, config, metrics, filename=None):
+    """Create comprehensive training summary plot.
+
+    Shows loss curves, field statistics, conserved quantities, and spacetime visualization.
+
+    Args:
+        model: Trained neural network
+        input_eval: Evaluation grid
+        config: Configuration object
+        metrics: Dictionary of training metrics
+        filename: Optional path to save figure
+
+    Returns:
+        Matplotlib figure object
+    """
     num_points = int(np.sqrt(input_eval.shape[0]))
     fig = plt.figure(figsize=(12, 10))
 
@@ -68,14 +85,13 @@ def plot_results(model, input_eval, config, metrics, filename=None):
     ax_iom.set_title('Conservation Laws')
     ax_iom.grid(True)
 
-    # Field visualization (spacetime plot)
+    # Spacetime visualization
     u = model(input_eval).detach().cpu()
     u_reshaped = u.reshape(num_points, num_points).numpy()
 
     ax_field = fig.add_subplot(324)
     T = getattr(config, 'T', 1.0)
     L = config.L
-    # extent: [left, right, bottom, top] = [x_min, x_max, t_min, t_max]
     im1 = ax_field.imshow(u_reshaped, extent=[-L, L, 0, T],
                           vmin=config.vmin, vmax=config.vmax,
                           origin='lower', cmap='coolwarm', aspect='auto')
@@ -90,12 +106,13 @@ def plot_results(model, input_eval, config, metrics, filename=None):
         print(f"Saved plot to {filename}")
     return fig
 
+
 def plot_2D_field(ax_field, u_reshaped, config, title='u(x,t)', show_colorbar=True):
+    """Plot 2D spacetime field on given axes."""
     T = getattr(config, 'T', 1.0)
     L = config.L
     aspect_ratio = (2 * L) / T
     im1 = ax_field.imshow(u_reshaped, extent=[-L, L, 0, T],
-                        #   vmin=config.vmin, vmax=config.vmax,
                           origin='lower', cmap='coolwarm', aspect=aspect_ratio)
     ax_field.set_title(title)
     ax_field.set_xlabel('x')
@@ -104,8 +121,21 @@ def plot_2D_field(ax_field, u_reshaped, config, title='u(x,t)', show_colorbar=Tr
         plt.colorbar(im1, ax=ax_field)
     return im1
 
+
 def plot_field_visualization(results, config, view='res', filename=None, suptitle=None):
-    field_quantities = []
+    """Create multi-panel visualization of field quantities.
+
+    Args:
+        results: Dictionary from kdv() function
+        config: Configuration object
+        view: One of 'res' (residuals), 'deriv' (derivatives),
+              'iom' (integrals of motion), 'curr' (currents)
+        filename: Optional path to save figure
+        suptitle: Optional figure title
+
+    Returns:
+        None (displays or saves figure)
+    """
     if view == 'res':
         field_quantities = ['res_KDV', 'res_H0', 'res_H1']
     elif view == 'deriv':
@@ -114,6 +144,8 @@ def plot_field_visualization(results, config, view='res', filename=None, suptitl
         field_quantities = ['u', 'rho_1', 'rho_2', 'rho_3']
     elif view == 'curr':
         field_quantities = ['u', 'J_0', 'rho_1', 'J_1']
+    else:
+        raise ValueError(f"Unknown view type: {view}")
 
     # Determine layout based on number of plots
     n_plots = len(field_quantities)
@@ -157,12 +189,27 @@ def plot_field_visualization(results, config, view='res', filename=None, suptitl
         print(f"Saved plot to {filename}")
 
 def load_equations(md_path):
+    """Load equation labels from markdown file for plot titles.
+
+    Parses markdown comments to extract LaTeX equation labels.
+
+    Args:
+        md_path: Path to markdown file with equation annotations
+
+    Returns:
+        eqs: Dictionary mapping variable names to LaTeX labels
+        descs: Dictionary mapping variable names to descriptions
+    """
     import re
-    text = open(md_path).read()
+    with open(md_path) as f:
+        text = f.read()
+
     eqs = {}
     for m in re.finditer(r'<!--\s*eq:(\w+)\s*-->.*?\n\$([^$]+)\$', text):
         eqs[m.group(1)] = f'${m.group(2)}$'
+
     descs = {}
     for m in re.finditer(r'<!--\s*desc:(\w+)\s*-->\s*(.+)', text):
         descs[m.group(1)] = m.group(2).strip()
+
     return eqs, descs

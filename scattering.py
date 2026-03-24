@@ -1,108 +1,151 @@
+"""Inverse scattering transform for KdV N-soliton solutions.
+
+This module implements the inverse scattering transform to construct
+multi-soliton solutions from scattering data and solves the associated
+Schrödinger eigenvalue problem to verify isospectrality.
+"""
 import torch
+import numpy as np
 from itertools import combinations
 from physics import gradient
-import numpy as np
+
 
 class ScatteringData:
+    """Constructs N-soliton solutions from scattering data.
+
+    Uses the inverse scattering transform to build reflectionless
+    N-soliton solutions from discrete eigenvalues (kappas) and
+    norming constants.
+
+    Args:
+        kappas: Wave numbers [κ₁, κ₂, ..., κ_N] (must be distinct and positive)
+        x0s: Initial positions [x₀₁, x₀₂, ..., x₀_N]
+        R: Reflection coefficient (None for reflectionless case)
+        autograd: If True, use autograd for derivatives; else finite differences
+        use_tau: If True, use tau-function formulation (more numerically stable)
+    """
     def __init__(self, kappas, x0s, R=None, autograd=True, use_tau=False):
         assert len(set(kappas)) == len(kappas), "kappas must be distinct"
         assert all(k > 0 for k in kappas), "kappas must be positive"
 
-        self.kappas = kappas          # [κ₁, κ₂, ..., κ_N]
-        self.x0 = x0s   # [c₁(0), c₂(0), ..., c_N(0)]
+        self.kappas = kappas
+        self.x0 = x0s
         self.c0 = [np.sqrt(2*k) * np.exp(k*x0) for k, x0 in zip(kappas, x0s)]
         assert all(c > 0 for c in self.c0), "norming constants must be positive"
 
-        self.Ns= len(kappas)
-        self.R = R                     # R(k), None for reflectionless
+        self.Ns = len(kappas)
+        self.R = R
         self.autograd = autograd
         self.use_tau = use_tau
+
+        # Precompute coefficients for tau-function formulation
         if self.use_tau:
             self.alpha2 = {}
             for i in range(self.Ns):
                 for j in range(i+1, self.Ns):
-                    self.alpha2[(i,j)] = ((kappas[i] - kappas[j]) / (kappas[i] + kappas[j]))**2
+                    ratio = (kappas[i] - kappas[j]) / (kappas[i] + kappas[j])
+                    self.alpha2[(i, j)] = ratio**2
+
             self.subsets = []
             for r in range(self.Ns + 1):
                 for S in combinations(range(self.Ns), r):
                     coeff = 1.0
                     for i, j in combinations(S, 2):
-                        coeff *= self.alpha2[(i,j)]
+                        coeff *= self.alpha2[(i, j)]
                     kappa_sum = sum(self.kappas[i] for i in S)
                     self.subsets.append((S, coeff, kappa_sum))
 
     def c(self, t):
-        # t has shape (Npts, 1), squeeze to (Npts,) for proper broadcasting
+        """Compute time-dependent norming constants c_n(t) = c_n(0) exp(-4κ_n³t)."""
         t_squeezed = t.squeeze()
         return [c0_n * torch.exp(-4 * k**3 * t_squeezed) for k, c0_n in zip(self.kappas, self.c0)]
 
     def A(self, x, t):
-        c_t = self.c(t) #list (Ns) of tensors (Npts,)
+        """Compute the Gel'fand-Levitan-Marchenko matrix A(x,t).
+
+        The potential is recovered via u = 2∂²_x log det A.
+
+        Returns:
+            Tensor of shape (Npts, Ns, Ns)
+        """
+        c_t = self.c(t)
         Npts = x.shape[0]
-        x_squeezed = x.squeeze()  # (Npts,)
+        x_squeezed = x.squeeze()
 
-        # Initialize A as zeros that depend on x to maintain gradient connection
+        # Initialize with identity (maintain gradient connection)
         A = torch.zeros(Npts, self.Ns, self.Ns, dtype=x.dtype, device=x.device)
-
-        # Add identity matrix by multiplying with x-dependent term
-        # Use a term like (1 + 0*x.sum()) to keep gradient connection
-        identity_scale = 1.0 + 0.0 * x.sum()
+        identity_scale = 1.0 + 0.0 * x.sum()  # Trick to maintain gradients
         for i in range(self.Ns):
             A[:, i, i] = identity_scale
 
+        # Add off-diagonal terms
         for m in range(self.Ns):
             for n in range(self.Ns):
-                # All terms are now 1D (Npts,) for proper broadcasting
                 exp_term = torch.exp((self.kappas[m] + self.kappas[n]) * x_squeezed)
-                A[:,m, n] = A[:,m, n] + c_t[m] * c_t[n] * exp_term / (self.kappas[m] + self.kappas[n])
-        return A #(Npts, Ns, Ns)
+                A[:, m, n] = A[:, m, n] + c_t[m] * c_t[n] * exp_term / (self.kappas[m] + self.kappas[n])
+
+        return A
 
     def u(self, x, t):
+        """Compute the potential u(x,t) = 2∂²_x log det A.
+
+        Returns:
+            Tensor of shape (Npts, 1)
+        """
         if self.use_tau:
-            # tau, tau_x, tau_xx = self._tau_and_derivs(x, t)
-            # return (2 * (tau_xx * tau - tau_x**2) / tau**2).unsqueeze(-1)
-            return self._u_tau(x,t)
+            return self._u_tau(x, t)
+
         if self.autograd:
-            # 2 ∂²_x log det A, via finite difference or autograd
             log_det = torch.logdet(self.A(x, t))
             log_det_x = gradient(log_det, x)
             log_det_xx = gradient(log_det_x, x)
             return 2 * log_det_xx
-        
-        else: #finite difference
+        else:
+            # Finite difference approximation
             log_det = lambda xx: torch.logdet(self.A(xx, t))
-            dx = 1e-3 #not 2L/N
+            dx = 1e-3
             ld_p = log_det(x + dx)
             ld_0 = log_det(x)
             ld_m = log_det(x - dx)
             return 2 * (ld_p - 2*ld_0 + ld_m) / dx**2
 
     def psi(self, x, t, n, Ainv=None):
-        # ψ_n = c_n(t) × Σ_m (A⁻¹)_nm × exp(-κ_m x)
+        """Compute the n-th bound state eigenfunction ψ_n(x,t).
+
+        Args:
+            x: Spatial coordinate
+            t: Time coordinate
+            n: Index of eigenfunction (0 to Ns-1)
+            Ainv: Precomputed inverse of A matrix (optional)
+
+        Returns:
+            Tensor of shape (Npts, 1)
+        """
         if Ainv is None:
             A = self.A(x, t)
-            Ainv = torch.linalg.inv(A)  # (Npts, Ns, Ns)
+            Ainv = torch.linalg.inv(A)
 
-        c_t = self.c(t)  # list of Ns tensors, each shape (Npts,)
-        x_squeezed = x.squeeze()  # (Npts,)
+        c_t = self.c(t)
+        x_squeezed = x.squeeze()
 
-        psi_n = torch.zeros_like(x_squeezed)  # (Npts,)
+        psi_n = torch.zeros_like(x_squeezed)
         for m in range(self.Ns):
-            exp_term = torch.exp(-self.kappas[m] * x_squeezed)  # (Npts,)
-            psi_n = psi_n + Ainv[:, n, m] * exp_term  # (Npts,)
+            exp_term = torch.exp(-self.kappas[m] * x_squeezed)
+            psi_n = psi_n + Ainv[:, n, m] * exp_term
 
-        psi_n = c_t[n] * psi_n  # (Npts,)
-        return psi_n.unsqueeze(-1)  # (Npts, 1)
-                           
+        psi_n = c_t[n] * psi_n
+        return psi_n.unsqueeze(-1)
 
     def eigenvalues(self):
+        """Return bound state eigenvalues λ_n = -κ_n²."""
         return [-k**2 for k in self.kappas]
-    
+
     def forward_fcn(self, input):
+        """Wrapper for use as a callable in training/pretraining."""
         input.requires_grad_(True)
         t = input[:, 0:1]
         x = input[:, 1:2]
-        return self.u(x,t)
+        return self.u(x, t)
 
     def _u_tau(self, x, t):
         log_a = []
@@ -165,31 +208,74 @@ class ScatteringData:
         return tau, tau_x, tau_xx
     
 class SchrodingerSolver:
+    """Solves the Schrödinger eigenvalue problem for the KdV potential.
+
+    Discretizes the operator L = -∂²_x + u and solves for eigenvalues
+    and eigenfunctions to verify that the PINN or analytic solution
+    preserves the isospectral properties.
+    """
     def __init__(self):
         pass
 
     def solve_timeslice(self, u_vals, dx):
-        u_int = u_vals[1:-1]  # interior points
-        diag = 2/dx**2 - u_int # main diagonal of H
-        off = -np.ones(len(u_int)-1) / dx**2  # sub/super diagonal
-    
+        """Solve eigenvalue problem for a single time slice.
+
+        Constructs the discretized Hamiltonian H = -∂²_x + u and
+        solves for eigenvalues and eigenvectors.
+
+        Args:
+            u_vals: Potential values on spatial grid
+            dx: Grid spacing
+
+        Returns:
+            eigenvalues, eigenvectors (both numpy arrays)
+        """
+        u_int = u_vals[1:-1]
+        diag = 2/dx**2 - u_int
+        off = -np.ones(len(u_int)-1) / dx**2
+
         H = np.diag(diag) + np.diag(off, 1) + np.diag(off, -1)
         eigenvalues, eigenvectors = np.linalg.eigh(H)
         return eigenvalues, eigenvectors
-    
+
     def solve(self, u, dx):
+        """Solve eigenvalue problem across all time slices.
+
+        Args:
+            u: Potential field, shape (num_time_steps, num_space_points)
+            dx: Spatial grid spacing
+
+        Returns:
+            eigenvector_stack: shape (num_time_steps-1, num_interior_points, num_eigenvectors)
+            eigenvalue_stack: shape (num_time_steps-1, num_eigenvalues)
+        """
         eigenvector_stack = []
         eigenvalue_stack = []
         num_samp = u.shape[0]
+
         for t_idx in range(num_samp - 1):
             evs, psis = self.solve_timeslice(u[t_idx], dx)
             eigenvalue_stack.append(evs)
             eigenvector_stack.append(psis)
+
         eigenvector_stack = np.array(eigenvector_stack)
         eigenvalue_stack = np.array(eigenvalue_stack)
         return eigenvector_stack, eigenvalue_stack
-    
+
     def check_SD(self, sd, input_eval, verbose=True):
+        """Validate that scattering data is preserved (isospectrality).
+
+        Checks that eigenvalues remain constant in time and that eigenfunctions
+        have the correct time dependence exp(-4κ³t).
+
+        Args:
+            sd: ScatteringData object
+            input_eval: Evaluation grid (t, x)
+            verbose: If True, print detailed validation results
+
+        Returns:
+            Dictionary with validation metrics
+        """
         t = input_eval[:, 0:1]
         x = input_eval[:, 1:2]
 

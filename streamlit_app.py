@@ -412,6 +412,58 @@ with st.expander("Expected vs Computed Eigenvalues"):
     }
     st.table(ev_data)
 
+# Kappa Recovery Plot
+st.header("Recovered Wave Numbers ($\\kappa$)")
+st.markdown("Verifying that wave numbers $\\kappa_n = \\sqrt{-\\lambda_n}$ remain constant over time (isospectrality).")
+
+# Compute recovered kappa values: κ = sqrt(-λ)
+kappa_rec = np.sqrt(-eigenvalue_stack[:, :n_kappas] + 1e-8)
+
+fig_kappa, ax_kappa = plt.subplots(figsize=(10, 5))
+for idx in range(n_kappas):
+    line, = ax_kappa.plot(tvals[:-1], kappa_rec[:, idx],
+                           label=f'$\\kappa_{{{idx}}}$ (recovered)',
+                           linewidth=2, alpha=0.8)
+    # Plot expected value as horizontal line
+    ax_kappa.axhline(kappas_sorted[idx],
+                     color=line.get_color(),
+                     linestyle='--',
+                     linewidth=1.5,
+                     alpha=0.7,
+                     label=f'$\\kappa_{{{idx}}}$ (expected: {kappas_sorted[idx]:.3f})')
+
+ax_kappa.set_xlabel('Time $t$', fontsize=12)
+ax_kappa.set_ylabel('Wave Number $\\kappa$', fontsize=12)
+ax_kappa.set_title('Recovered Wave Numbers from Eigenvalues', fontsize=14)
+ax_kappa.legend(loc='best', fontsize=10)
+ax_kappa.grid(True, alpha=0.3)
+
+# Set reasonable y-limits
+kappa_min = min(kappas_sorted) * 0.8
+kappa_max = max(kappas_sorted) * 1.2
+ax_kappa.set_ylim(kappa_min, kappa_max)
+
+plt.tight_layout()
+st.pyplot(fig_kappa)
+plt.close()
+
+# Show statistics
+st.subheader("Kappa Recovery Statistics")
+cols = st.columns(n_kappas)
+for idx in range(n_kappas):
+    with cols[idx]:
+        kappa_mean = kappa_rec[:, idx].mean()
+        kappa_std = kappa_rec[:, idx].std()
+        kappa_error = abs(kappa_mean - kappas_sorted[idx])
+
+        st.metric(
+            label=f"$\\kappa_{{{idx}}}$",
+            value=f"{kappa_mean:.4f}",
+            delta=f"±{kappa_std:.2e} std"
+        )
+        st.caption(f"Expected: {kappas_sorted[idx]:.4f}")
+        st.caption(f"Error: {kappa_error:.2e}")
+
 st.sidebar.markdown("---")
 st.sidebar.info(f"Using device: {device}")
 st.sidebar.info(f"Number of solitons: {len(st.session_state.kappas)}")
