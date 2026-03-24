@@ -31,8 +31,14 @@ def plot_results(model, input_eval, config, metrics, filename=None):
     # Loss plot
     ax_loss = fig.add_subplot(321)
     ax_loss.semilogy(metrics['L_total'], label='$L_{total}$')
-    ax_loss.semilogy(metrics['L_kdv'], label='$L_{kdv}$')
-    ax_loss.semilogy(metrics['L_BC'], label='$L_{BC}$')
+    if 'L_KDV' in metrics and len(metrics['L_KDV']) > 0:
+        ax_loss.semilogy(metrics['L_KDV'], label='$L_{KDV}$')
+    if 'L_IC' in metrics and len(metrics['L_IC']) > 0:
+        ax_loss.semilogy(metrics['L_IC'], label='$L_{IC}$')
+    if 'L_BC' in metrics and len(metrics['L_BC']) > 0:
+        ax_loss.semilogy(metrics['L_BC'], label='$L_{BC}$')
+    if 'L_S' in metrics and len(metrics['L_S']) > 0:
+        ax_loss.semilogy(metrics['L_S'], label='$L_{S}$', linestyle='--')
     ax_loss.set_xlabel('Epoch')
     ax_loss.set_ylabel('Loss')
     ax_loss.legend()
@@ -89,7 +95,8 @@ def plot_2D_field(ax_field, u_reshaped, config, title='u(x,t)', show_colorbar=Tr
     L = config.L
     aspect_ratio = (2 * L) / T
     im1 = ax_field.imshow(u_reshaped, extent=[-L, L, 0, T],
-                            origin='lower', cmap='coolwarm', aspect=aspect_ratio)
+                        #   vmin=config.vmin, vmax=config.vmax,
+                          origin='lower', cmap='coolwarm', aspect=aspect_ratio)
     ax_field.set_title(title)
     ax_field.set_xlabel('x')
     ax_field.set_ylabel('t')
@@ -97,10 +104,10 @@ def plot_2D_field(ax_field, u_reshaped, config, title='u(x,t)', show_colorbar=Tr
         plt.colorbar(im1, ax=ax_field)
     return im1
 
-def plot_field_visualization(results, config, view='res', filename=None):
+def plot_field_visualization(results, config, view='res', filename=None, suptitle=None):
     field_quantities = []
     if view == 'res':
-        field_quantities = ['res_kdv', 'res_H0', 'res_H1']
+        field_quantities = ['res_KDV', 'res_H0', 'res_H1']
     elif view == 'deriv':
         field_quantities = ['u', 'u_t', 'u_x', 'u_xx', 'u_xxx']
     elif view == 'iom':
@@ -140,6 +147,9 @@ def plot_field_visualization(results, config, view='res', filename=None):
     # Hide unused subplots
     for i in range(n_plots, len(axes)):
         axes[i].set_visible(False)
+
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=14, y=1.0)
 
     plt.tight_layout()
     if filename:

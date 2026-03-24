@@ -1,7 +1,8 @@
 import torch
 import matplotlib.pyplot as plt
 from sampling import sample_bulk, sample_boundary
-from physics import kdv, init_metrics, soliton_from_config
+from physics import kdv, init_metrics
+from scattering import ScatteringData
 from plot_utils import _init_interactive_plot, _update_interactive_plot
 
 def extract_means(results):
@@ -16,9 +17,14 @@ def extract_losses_MSE(results, config):
     L_total = 0
     for k in loss_types:
         L_k = torch.mean(results[f'res_{k}']**2)
-        lambda_k = getattr(config, f'lambda_{k}') 
+        lambda_k = getattr(config, f'lambda_{k}')
         L_total += lambda_k * L_k
         losses[f'L_{k}'] = lambda_k * L_k.detach().cpu().item()
+
+    if 'res_S' in results:
+        L_S = torch.mean(results['res_S']**2)
+        losses['L_S'] = L_S.detach().cpu().item()
+
     return L_total, losses
 
 
@@ -28,6 +34,7 @@ def pretrain(model, fcn, config, device, num_epochs=200):
     grid = sample_bulk(config, resample=False).to(device)
     grid.requires_grad_(True)
     target = fcn(grid).detach()
+    plot_interval = getattr(config, 'plot_interval', 50)
     for epoch in range(num_epochs):
         model.train()
         u = model(grid)
@@ -35,8 +42,10 @@ def pretrain(model, fcn, config, device, num_epochs=200):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        if epoch % plot_interval == 0:
+            print(f'Pretrain Epoch {epoch:4d} | L_total : {loss.item():.3e}')
 
-def train_pinn(model, config, device, start_epoch=0, optimizer_states=None, interactive=False):
+def train_pinn(model, config, device, start_epoch=0, optimizer_states=None, interactive=False, save_plot=None):
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=config.num_epochs, eta_min=config.eta_min
@@ -55,11 +64,14 @@ def train_pinn(model, config, device, start_epoch=0, optimizer_states=None, inte
             interactive = False
 
     input_eval = sample_bulk(config, resample=False, num_samp=config.num_samp_eval).to(device)
-    fcn = soliton_from_config(config)
+    sd = ScatteringData(config.kappas, config.x0s, R=None, use_tau=True)
+    fcn = sd.forward_fcn
     # Initialize metrics tracking
     metrics = init_metrics()
-    metrics.update({'L_total': [], 'L_kdv': [], 'L_BC': []})
+    metrics.update({'L_total': [], 'L_KDV': [], 'L_IC': [], 'L_BC': [], 'L_S': []})
 
+    # input_BC = sample_boundary(config, resample=False).to(device)
+    # input_bulk = sample_bulk(config=config, resample=True).to(device)
     #TRAINING LOOP
     print(f"Training for {config.num_epochs} epochs (from epoch {start_epoch})")
     for epoch in range(start_epoch, config.num_epochs):
@@ -73,9 +85,12 @@ def train_pinn(model, config, device, start_epoch=0, optimizer_states=None, inte
         results = kdv(u, input_bulk)
 
         # update results for IC and boundary conditions
-        # these are generic residuals wrt fcn evaluated on the boundary
-        input_BC = sample_boundary(config, resample=True).to(device)
-        input_BC.requires_grad_(True) #NEEDED?
+        input_IC = sample_boundary(config, resample=True, ic_only=True).to(device)
+        input_IC.requires_grad_(True)
+        results.update(calc_residual(model, input_IC, fcn=fcn, key='IC'))
+
+        input_BC = sample_boundary(config, resample=True, bc_only=True).to(device)
+        input_BC.requires_grad_(True)
         results.update(calc_residual(model, input_BC, fcn=fcn, key='BC'))
 
         results.update({'res_S' : u - fcn(input_bulk)})
@@ -98,9 +113,18 @@ def train_pinn(model, config, device, start_epoch=0, optimizer_states=None, inte
 
         #More plotting and loggging
         if epoch % plot_interval == 0:
-            print(f'Epoch {epoch:4d} | ' + ' | '.join([f'{k} : {v:.3e}' for k, v in loss_dict.items()]))
+            print_keys = ['L_total', 'L_KDV', 'L_IC', 'L_BC', 'L_S', 'mean_u', 'mean_u_t', 'mean_u_x']
+            print_items = [(k, loss_dict[k]) for k in print_keys if k in loss_dict]
+            print(f'Epoch {epoch:4d} | ' + ' | '.join([f'{k} : {v:.3e}' for k, v in print_items]))
             if interactive:
                 _update_interactive_plot(model, input_eval, config, metrics)
+            if save_plot:
+                from plot_utils import plot_results
+                model.eval()
+                with torch.no_grad():
+                    fig = plot_results(model, input_eval, config, metrics, filename=save_plot)
+                    plt.close(fig)
+                model.train()
                 
 
     return {'model': model, 'metrics': metrics, 'optimizer': optimizer}

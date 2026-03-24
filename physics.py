@@ -45,7 +45,7 @@ def kdv(u, input):
     J_1_x = gradient(J_1, input)[:, 1:2]
     rho_2_t = gradient(rho_2,input)[:,0:1]
 
-    res_kdv = u_t + 6 * u * u_x + u_xxx
+    res_KDV = u_t + 6 * u * u_x + u_xxx
     res_H0 = u_t + J_0_x
     res_H1 = rho_2_t + J_1_x
 
@@ -60,14 +60,14 @@ def kdv(u, input):
     results['rho_3'] = rho_3
     results['J_0'] = J_0
     results['J_1'] = J_1
-    results['res_kdv'] = res_kdv
+    results['res_KDV'] = res_KDV
     results['res_H0'] = res_H0
     results['res_H1'] = res_H1
 
     return results
 
 def init_metrics():
-    base_keys = ['u', 'u_t', 'u_x', 'u_xx', 'u_xxx', 'rho_1', 'rho_2', 'rho_3', 'J_0', 'J_1', 'res_kdv', 'res_H0', 'res_H1']
+    base_keys = ['u', 'u_t', 'u_x', 'u_xx', 'u_xxx', 'rho_1', 'rho_2', 'rho_3', 'J_0', 'J_1', 'res_KDV', 'res_H0', 'res_H1']
     return {f'mean_{k}': [] for k in base_keys}
 
 

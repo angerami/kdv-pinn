@@ -163,3 +163,135 @@ class ScatteringData:
             tau_xx = tau_xx + (2 * kappa_sum)**2 * term
 
         return tau, tau_x, tau_xx
+    
+class SchrodingerSolver:
+    def __init__(self):
+        pass
+
+    def solve_timeslice(self, u_vals, dx):
+        u_int = u_vals[1:-1]  # interior points
+        diag = 2/dx**2 - u_int # main diagonal of H
+        off = -np.ones(len(u_int)-1) / dx**2  # sub/super diagonal
+    
+        H = np.diag(diag) + np.diag(off, 1) + np.diag(off, -1)
+        eigenvalues, eigenvectors = np.linalg.eigh(H)
+        return eigenvalues, eigenvectors
+    
+    def solve(self, u, dx):
+        eigenvector_stack = []
+        eigenvalue_stack = []
+        num_samp = u.shape[0]
+        for t_idx in range(num_samp - 1):
+            evs, psis = self.solve_timeslice(u[t_idx], dx)
+            eigenvalue_stack.append(evs)
+            eigenvector_stack.append(psis)
+        eigenvector_stack = np.array(eigenvector_stack)
+        eigenvalue_stack = np.array(eigenvalue_stack)
+        return eigenvector_stack, eigenvalue_stack
+    
+    def check_SD(self, sd, input_eval, verbose=True):
+        t = input_eval[:, 0:1]
+        x = input_eval[:, 1:2]
+
+        num_samp = int(np.sqrt(input_eval.shape[0]))
+
+        x_d = x.detach().reshape(num_samp, num_samp)[0, :].cpu().numpy()
+        dx = x_d[1] - x_d[0]
+
+        kappas = sd.kappas
+        c0 = sd.c0
+        Ns = sd.Ns
+
+        u_vals = sd.u(x, t)
+        u = u_vals.reshape(num_samp, num_samp).detach().cpu().numpy()
+
+        eigenvector_stack, eigenvalue_stack = self.solve(u, dx)
+
+        kappas_sorted = sorted(kappas, reverse=True)
+        expected_eigenvalues_sorted = [-k**2 for k in kappas_sorted]
+
+        num_time_steps = eigenvalue_stack.shape[0]
+        eigenvalue_residuals = []
+        eigenvalue_time_variance = []
+
+        for n in range(Ns):
+            lam_n = eigenvalue_stack[:, n]
+            expected_lam = expected_eigenvalues_sorted[n]
+
+            residual_n = np.abs(lam_n - expected_lam)
+            eigenvalue_residuals.append(residual_n)
+
+            time_variance = np.var(lam_n)
+            eigenvalue_time_variance.append(time_variance)
+
+        eigenvalue_residuals = np.array(eigenvalue_residuals)
+        mse_eigenvalues = np.mean(eigenvalue_residuals**2)
+        mean_time_variance = np.mean(eigenvalue_time_variance)
+
+        t_vals = t.detach().reshape(num_samp, num_samp)[:, 0].cpu().numpy()
+        t_vals = t_vals[:-1]
+
+        psi_time_residuals = []
+        for n in range(Ns):
+            kappa_n = kappas_sorted[n]
+            expected_decay = np.exp(-4 * kappa_n**3 * t_vals)
+
+            psi_n_norms = []
+            for t_idx in range(num_time_steps):
+                psi_n_t = eigenvector_stack[t_idx, :, n]
+                norm = np.sqrt(np.sum(psi_n_t**2) * dx)
+                psi_n_norms.append(norm)
+            psi_n_norms = np.array(psi_n_norms)
+
+            if psi_n_norms[0] > 0:
+                normalized_norms = psi_n_norms / psi_n_norms[0]
+                residual = np.abs(normalized_norms - expected_decay)
+                psi_time_residuals.append(residual)
+
+        psi_time_residuals = np.array(psi_time_residuals)
+        mse_psi_time = np.mean(psi_time_residuals**2)
+
+        if verbose:
+            print("=" * 60)
+            print("Scattering Data Validation")
+            print("=" * 60)
+            print(f"\nNumber of solitons: {Ns}")
+            print(f"Kappas (sorted): {[f'{k:.3f}' for k in kappas_sorted]}")
+            print("\n--- Isospectrality Check ---")
+            print(f"Expected eigenvalues: {[f'{ev:.4f}' for ev in expected_eigenvalues_sorted[:Ns]]}")
+            print(f"Computed eigenvalues (t=0): {[f'{eigenvalue_stack[0, n]:.4f}' for n in range(Ns)]}")
+            print(f"MSE (eigenvalues): {mse_eigenvalues:.6e}")
+            print(f"Mean time variance: {mean_time_variance:.6e}")
+
+            print("\n--- Time Dependence Check ---")
+            print(f"MSE (psi time evolution): {mse_psi_time:.6e}")
+
+            print("\n--- Summary ---")
+            total_mse = mse_eigenvalues + mse_psi_time
+            print(f"Total MSE: {total_mse:.6e}")
+
+            if mse_eigenvalues < 1e-3 and mean_time_variance < 1e-6:
+                print("PASS: Eigenvalues are isospectral")
+            else:
+                print("FAIL: Eigenvalues vary too much")
+
+            if mse_psi_time < 1e-2:
+                print("PASS: Eigenvectors have correct time dependence")
+            else:
+                print("FAIL: Eigenvectors time evolution is incorrect")
+            print("=" * 60)
+
+        results = {
+            'eigenvalue_stack': eigenvalue_stack,
+            'eigenvector_stack': eigenvector_stack,
+            'expected_eigenvalues': expected_eigenvalues_sorted,
+            'mse_eigenvalues': mse_eigenvalues,
+            'mean_time_variance': mean_time_variance,
+            'mse_psi_time': mse_psi_time,
+            'total_mse': mse_eigenvalues + mse_psi_time,
+            'eigenvalue_residuals': eigenvalue_residuals,
+            'psi_time_residuals': psi_time_residuals
+        }
+
+        return results
+

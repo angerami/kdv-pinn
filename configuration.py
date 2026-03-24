@@ -17,12 +17,11 @@ kdv_config = SimpleNamespace(
     vmin=0,              # Colorbar min for plotting
     vmax=3,               # Colorbar max for plotting
     # Loss and their weights
-    loss_types=['kdv', 'BC'],
-    lambda_kdv=1,
+    loss_types=['KDV', 'IC', 'BC'],
+    lambda_KDV=1,
+    lambda_IC=1,
     lambda_BC=1,
     # Soliton parameters
-    soliton_type='sech',  # 'sech', 'cn' (cnoidal), 'gauss', or 'scattering'
-    kappa=1.0,            # Wave number parameter κ
     m=0.5,                # Elliptic modulus m ∈ [0,1] for cnoidal waves
     x0=0.0,               # Initial position offset
     # Scattering data parameters (for multi-soliton solutions)

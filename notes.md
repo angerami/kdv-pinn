@@ -81,8 +81,8 @@ $J_1 = -\frac{9}{2}u^4 - 3u^2 u_{xx} + 6uu_x^2 + u_x u_{xxx} - \frac{1}{2}u_{xx}
 
 ## Residuals
 
-<!-- desc:res_kdv --> **KdV PDE residual**
-<!-- eq:res_kdv --> <!-- def:res_kdv -->
+<!-- desc:res_KDV --> **KdV PDE residual**
+<!-- eq:res_KDV --> <!-- def:res_KDV -->
 $\mathcal{R}_{\mathrm{KdV}} = u_t + 6uu_x + u_{xxx}$
 
 &nbsp;

@@ -38,12 +38,18 @@ def sample_slice(zval, config, resample=False, num_samp=-1, time=True):
         x = zval * torch.ones_like(t)
     return torch.stack([t, x], dim=1)  # N x 2
 
-def sample_boundary(config, resample=False, num_samp=-1):
+def sample_boundary(config, resample=False, num_samp=-1, ic_only=False, bc_only=False):
     L = config.L
     input_0 = sample_slice(0, config, resample, num_samp, time=True)
     input_left = sample_slice(-L, config, resample, num_samp, time=False)
     input_right = sample_slice(L, config, resample, num_samp, time=False)
-    return torch.cat([input_0, input_left, input_right], dim=0)
+
+    if ic_only:
+        return input_0
+    elif bc_only:
+        return torch.cat([input_left, input_right], dim=0)
+    else:
+        return torch.cat([input_0, input_left, input_right], dim=0)
 
 def extract_time_slices(u, input_tensor, t_values, config, num_x_points=300):
     import numpy as np

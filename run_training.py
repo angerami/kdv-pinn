@@ -1,7 +1,8 @@
 import argparse
 import torch
 from models import KdV_pinn
-from train import train_pinn
+from train import train_pinn, pretrain
+from scattering import ScatteringData, SchrodingerSolver
 from configuration import kdv_config, config_to_dict
 
 
