@@ -1,0 +1,42 @@
+# Project-specific
+.claude/
+archive/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# PyTorch models
+*.pt
+*.pth
+*.ckpt
+
+# Output directories
+validation_output/
+validation_output_*/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+venv/
+env/
+.env
