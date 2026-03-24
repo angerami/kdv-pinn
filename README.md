@@ -1,4 +1,54 @@
-# KdV Project
+# KdV PINN
+
+Physics-Informed Neural Network for the Korteweg-de Vries equation using inverse scattering transform.
+
+## Project Structure
+
+```
+kdv-pinn/
+├── configuration.py    # Configuration and hyperparameters
+├── models.py          # Neural network architectures (KdV_pinn, SIREN)
+├── physics.py         # KdV operators and conserved quantities
+├── scattering.py      # Inverse scattering transform
+├── sampling.py        # Domain sampling utilities
+├── plot_utils.py      # Visualization tools
+├── train.py           # Training routines
+├── validation.py      # Validation script
+├── notebooks/         # Jupyter notebooks for exploration
+│   ├── analytic_solutions.ipynb
+│   ├── kdv_pinn.ipynb
+│   └── example_kdv_slices.ipynb
+├── apps/              # Interactive applications
+│   └── streamlit_app.py
+├── equations.md       # Equation definitions for plotting
+└── README.md
+```
+
+## Quick Start
+
+### Training
+```bash
+# Train with default configuration
+python train.py
+
+# Train with custom epochs
+python train.py --epochs 5000
+
+# Run full validation
+python validation.py
+```
+
+### Interactive Applications
+```bash
+# Launch Streamlit app for exploring N-soliton solutions
+streamlit run apps/streamlit_app.py
+```
+
+### Notebooks
+```bash
+# Open in Jupyter
+jupyter notebook notebooks/kdv_pinn.ipynb
+```
 
 ## Analytical Tools
 Visualize soliton behavior for $N$ soliton solutions as specified by scattering data.
@@ -19,8 +69,8 @@ Demonstrate solutions are Isospectral, Compute Lax operators and validate time e
 Streamlit demo
 
 ### Deliverables
-- Functinality mostly in `scattering.py`
-- Streamlit front end `streamlit_app.py`
+- Functionality in `scattering.py`
+- Interactive Streamlit app: `apps/streamlit_app.py`
 
 TODO: drill down on eigenvalue checker warnings
 
@@ -34,7 +84,7 @@ Function `physics.kdv` computes:
 Notebook evaluating the `kdv` function on analytical soliton results should show:
 - zero residuals
 - fields consistent with those expected from previous study (compare to streamlit app plots)
-This is more or less `analytic_solutions.ipynb` 
+This is more or less `notebooks/analytic_solutions.ipynb` 
 
 TODO: Is this fully up to date with latest developments in `physics.py` and `scattering.py`.
 
@@ -55,7 +105,7 @@ STATUS: training convergence brittle not scalable, needs deeper dive. only tried
 
 ### Deliverables
 
-Code to do this is in `training.py`. It can be driven either by `run_training.py` from the command line or using the notebook `kdv_pinn.ipynb`.
+Code to do this is in `train.py`. It can be driven from the command line (`python train.py`) or using the notebook `notebooks/kdv_pinn.ipynb`.
 
 TODO: interactive mode works well but cmd line should generate a plot that gets updated or series of plots or something. ideally i could run it from the command line and open the PNG/PDF file in VS Code that would update (using the same frequency as from the interactive mode in the notebook)
 

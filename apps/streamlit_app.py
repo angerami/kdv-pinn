@@ -1,3 +1,7 @@
+# Add parent directory to path for imports
+import sys
+sys.path.insert(0, '..')
+
 import streamlit as st
 import torch
 import numpy as np
