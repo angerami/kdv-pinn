@@ -73,7 +73,7 @@ def initialize_session_state():
     if 'T' not in st.session_state:
         st.session_state.T = 3
     if 'num_samp_eval' not in st.session_state:
-        st.session_state.num_samp_eval = 256
+        st.session_state.num_samp_eval = 64
     if 'use_tau' not in st.session_state:
         st.session_state.use_tau = True
     if 'vmax' not in st.session_state:
