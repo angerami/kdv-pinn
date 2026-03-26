@@ -1,6 +1,10 @@
 # Add parent directory to path for imports
 import sys
-sys.path.insert(0, '..')
+import os
+# Get the parent directory of the current file
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
 import streamlit as st
 import torch
@@ -13,12 +17,18 @@ from sampling import sample_bulk
 
 st.set_page_config(page_title="KdV Soliton Inspector", layout="wide")
 
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-elif torch.backends.mps.is_available():
-    device = torch.device("mps")
-else:
+# Device selection - skip MPS check on Hugging Face Spaces (causes hang)
+if "SPACE_ID" in os.environ:
+    # Running on Hugging Face Spaces - use CPU only
     device = torch.device("cpu")
+else:
+    # Running locally - check for GPU acceleration
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
 
 PRESETS = {
     "2-Soliton": {
