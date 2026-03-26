@@ -48,8 +48,8 @@ def kdv(u, input):
         Dictionary containing:
             - Derivatives: u_t, u_x, u_xx, u_xxx
             - Conserved densities: rho_1 (momentum), rho_2 (energy), rho_3
-            - Fluxes: J_0, J_1
-            - Residuals: res_KDV, res_H0, res_H1
+            - Fluxes: J_0, J_1, J_2
+            - Residuals: res_KDV, res_H0, res_H1, res_H2
     """
     # Compute spatial and temporal derivatives
     grad_u = gradient(u, input)
@@ -69,17 +69,21 @@ def kdv(u, input):
 
     # Conservation law fluxes
     J_0 = 3 * u**2 + u_xx
-    J_1 = -4.5 * u**4 - 3 * u**2 * u_xx + 6 * u * u_x**2 + u_x * u_xxx - 0.5 * u_xx**2
+    J_1 = 2 * u**3 + u * u_xx - u_x**2 / 2
+    J_2 = -4.5 * u**4 - 3 * u**2 * u_xx + 6 * u * u_x**2 + u_x * u_xxx - 0.5 * u_xx**2
 
     # Flux derivatives
     J_0_x = gradient(J_0, input)[:, 1:2]
     J_1_x = gradient(J_1, input)[:, 1:2]
+    J_2_x = gradient(J_2, input)[:, 1:2]
+    rho_1_t = gradient(rho_1, input)[:, 0:1]
     rho_2_t = gradient(rho_2, input)[:, 0:1]
 
     # PDE residuals
     res_KDV = u_t + 6 * u * u_x + u_xxx  # KdV equation
     res_H0 = u_t + J_0_x  # Mass conservation
-    res_H1 = rho_2_t + J_1_x  # Energy conservation
+    res_H1 = rho_1_t + J_1_x  # Mass conservation
+    res_H2 = rho_2_t + J_2_x  # Energy conservation
 
     return {
         'u': u,
@@ -92,16 +96,18 @@ def kdv(u, input):
         'rho_3': rho_3,
         'J_0': J_0,
         'J_1': J_1,
+        'J_2': J_2,
         'res_KDV': res_KDV,
         'res_H0': res_H0,
         'res_H1': res_H1,
+        'res_H2': res_H2,
     }
 
 
 def init_metrics():
     """Initialize dictionary for tracking field statistics during training."""
     base_keys = ['u', 'u_t', 'u_x', 'u_xx', 'u_xxx', 'rho_1', 'rho_2',
-                 'rho_3', 'J_0', 'J_1', 'res_KDV', 'res_H0', 'res_H1']
+                 'rho_3', 'J_0', 'J_1', 'J_2', 'res_KDV', 'res_H0', 'res_H1','res_H2']
     return {f'mean_{k}': [] for k in base_keys}
 
 

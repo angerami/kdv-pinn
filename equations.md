@@ -75,7 +75,13 @@ $J_0 = 3u^2 + u_{xx}$
 
 <!-- desc:J_1 --> **Flux for** $\rho_2$
 <!-- eq:J_1 --> <!-- def:J_1 -->
-$J_1 = -\frac{9}{2}u^4 - 3u^2 u_{xx} + 6uu_x^2 + u_x u_{xxx} - \frac{1}{2}u_{xx}^2$
+$J_1 = 3u^2 + uu_{x} - \frac{1}{2}u^2$
+
+&nbsp;
+
+<!-- desc:J_2 --> **Flux for** $\rho_2$
+<!-- eq:J_2 --> <!-- def:J_2 -->
+$J_2 = -\frac{9}{2}u^4 - 3u^2 u_{xx} + 6uu_x^2 + u_x u_{xxx} - \frac{1}{2}u_{xx}^2$
 
 ---
 
@@ -89,10 +95,16 @@ $\mathcal{R}_{\mathrm{KdV}} = u_t + 6uu_x + u_{xxx}$
 
 <!-- desc:res_H0 --> **Conservation residual for momentum**
 <!-- eq:res_H0 --> <!-- def:res_H0 -->
-$\mathcal{R}_{H_0} = \partial_t \rho_1 + \partial_x J_0$
+$\mathcal{R}_{H_0} = \partial_t \rho_0 + \partial_x J_0$
 
 &nbsp;
 
-<!-- desc:res_H1 --> **Conservation residual for energy**
+<!-- desc:res_H1 --> **Conservation residual for momentum**
 <!-- eq:res_H1 --> <!-- def:res_H1 -->
-$\mathcal{R}_{H_1} = \partial_t \rho_2 + \partial_x J_1$
+$\mathcal{R}_{H_1} = \partial_t \rho_1 + \partial_x J_1$
+
+&nbsp;
+
+<!-- desc:res_H2 --> **Conservation residual for energy**
+<!-- eq:res_H2 --> <!-- def:res_H2 -->
+$\mathcal{R}_{H_2} = \partial_t \rho_2 + \partial_x J_2$

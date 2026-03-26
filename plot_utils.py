@@ -96,14 +96,69 @@ def plot_results(model, input_eval, config, metrics, filename=None):
                           vmin=config.vmin, vmax=config.vmax,
                           origin='lower', cmap='coolwarm', aspect='auto')
     ax_field.set_title('u(t, x) - Spacetime')
-    ax_field.set_xlabel('x')
-    ax_field.set_ylabel('t')
+    ax_field.set_xlabel('$x$')
+    ax_field.set_ylabel('$t$')
     plt.colorbar(im1, ax=ax_field)
 
     plt.tight_layout()
     if filename:
         plt.savefig(filename, dpi=150, bbox_inches='tight')
         print(f"Saved plot to {filename}")
+    return fig
+
+
+def plot_results_2panel(model, input_eval, config, metrics, filename=None):
+    """Create 2-panel summary plot for writeup.
+
+    Shows training loss (left) and spacetime field u(x,t) (right).
+
+    Args:
+        model: Trained neural network
+        input_eval: Evaluation grid
+        config: Configuration object
+        metrics: Dictionary of training metrics
+        filename: Optional path to save figure
+
+    Returns:
+        Matplotlib figure object
+    """
+    num_points = int(np.sqrt(input_eval.shape[0]))
+    fig, (ax_loss, ax_field) = plt.subplots(1, 2, figsize=(12, 4))
+
+    # Loss plot (left panel)
+    ax_loss.semilogy(metrics['L_total'], label='$L_{total}$')
+    if 'L_KDV' in metrics and len(metrics['L_KDV']) > 0:
+        ax_loss.semilogy(metrics['L_KDV'], label='$L_{KDV}$')
+    if 'L_IC' in metrics and len(metrics['L_IC']) > 0:
+        ax_loss.semilogy(metrics['L_IC'], label='$L_{IC}$')
+    if 'L_BC' in metrics and len(metrics['L_BC']) > 0:
+        ax_loss.semilogy(metrics['L_BC'], label='$L_{BC}$')
+    if 'L_S' in metrics and len(metrics['L_S']) > 0:
+        ax_loss.semilogy(metrics['L_S'], label='$L_{S}$', linestyle='--')
+    ax_loss.set_xlabel('Epoch')
+    ax_loss.set_ylabel('Loss')
+    ax_loss.legend()
+    ax_loss.set_title('Training Loss')
+    ax_loss.grid(True)
+
+    # Spacetime visualization (right panel)
+    u = model(input_eval).detach().cpu()
+    u_reshaped = u.reshape(num_points, num_points).numpy()
+
+    T = getattr(config, 'T', 1.0)
+    L = config.L
+    im = ax_field.imshow(u_reshaped, extent=[-L, L, 0, T],
+                         vmin=config.vmin, vmax=config.vmax,
+                         origin='lower', cmap='coolwarm', aspect='auto')
+    ax_field.set_title('$u(x, t)$ - Spacetime')
+    ax_field.set_xlabel('$x$')
+    ax_field.set_ylabel('$t$')
+    plt.colorbar(im, ax=ax_field)
+
+    plt.tight_layout()
+    if filename:
+        plt.savefig(filename, dpi=150, bbox_inches='tight')
+        print(f"Saved 2-panel plot to {filename}")
     return fig
 
 
@@ -115,8 +170,8 @@ def plot_2D_field(ax_field, u_reshaped, config, title='u(x,t)', show_colorbar=Tr
     im1 = ax_field.imshow(u_reshaped, extent=[-L, L, 0, T],
                           origin='lower', cmap='coolwarm', aspect=aspect_ratio)
     ax_field.set_title(title)
-    ax_field.set_xlabel('x')
-    ax_field.set_ylabel('t')
+    ax_field.set_xlabel('$x$')
+    ax_field.set_ylabel('$t$')
     if show_colorbar:
         plt.colorbar(im1, ax=ax_field)
     return im1
@@ -137,13 +192,13 @@ def plot_field_visualization(results, config, view='res', filename=None, suptitl
         None (displays or saves figure)
     """
     if view == 'res':
-        field_quantities = ['res_KDV', 'res_H0', 'res_H1']
+        field_quantities = ['res_KDV', 'res_H0', 'res_H1','res_H2']
     elif view == 'deriv':
         field_quantities = ['u', 'u_t', 'u_x', 'u_xx', 'u_xxx']
     elif view == 'iom':
         field_quantities = ['u', 'rho_1', 'rho_2', 'rho_3']
     elif view == 'curr':
-        field_quantities = ['u', 'J_0', 'rho_1', 'J_1']
+        field_quantities = ['u', 'J_0', 'rho_1', 'J_1','J_2']
     else:
         raise ValueError(f"Unknown view type: {view}")
 
