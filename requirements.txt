@@ -1,0 +1,13 @@
+# KdV-PINN Requirements
+# Physics-Informed Neural Network for solving the Korteweg-de Vries equation
+
+# Core dependencies (required)
+torch>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+
+# Optional dependencies
+scipy>=1.10.0         # For cnoidal wave solutions (physics.py)
+flask>=2.3.0          # For parameter sweep viewer (sweep_viewer.py)
+streamlit>=1.28.0     # For interactive Streamlit app (apps/streamlit_app.py)
+ipython>=8.12.0       # For Jupyter notebook integration (interactive plotting)
