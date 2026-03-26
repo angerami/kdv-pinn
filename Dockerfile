@@ -15,6 +15,6 @@ RUN pip3 install -r requirements.txt
 COPY *.py ./
 COPY apps/ ./apps/
 
-EXPOSE 8501
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
-ENTRYPOINT ["streamlit", "run", "apps/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+EXPOSE 7860
+HEALTHCHECK CMD curl --fail http://localhost:7860/_stcore/health
+ENTRYPOINT ["streamlit", "run", "apps/streamlit_app.py", "--server.port=7860", "--server.address=0.0.0.0"]

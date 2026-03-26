@@ -160,23 +160,28 @@ def validate_run(output_dir='validation_output'):
     print(f"Using {device} device.")
 
     training_config = kdv_config
-    training_config.num_epochs = 5000
-    training_config.num_pretrain_epochs = 2500
-    training_config.num_samp_bulk = 96
-    training_config.num_samp_eval = 256
-    training_config.plot_interval = 100
-    training_config.MLP = [2, 128, 128, 128, 1]
-    training_config.kappas = [1.8, 1.3]
-    training_config.x0s = [8, 7]
-    training_config.lr = 1e-3
-    training_config.T = 1
-    training_config.L = 10
-    training_config.Lmax = 15
-    training_config.lambda_BC = 1
-    training_config.lambda_kdv = 1
-    training_config.vmin = 0
-    training_config.vmax = 3
+
+    # Only set defaults if not already configured (for parameter sweeps)
+    if not hasattr(training_config, '_configured'):
+        training_config.num_epochs = 5000
+        training_config.num_pretrain_epochs = 2500
+        training_config.num_samp_bulk = 96
+        training_config.num_samp_eval = 512
+        training_config.plot_interval = 50
+        training_config.MLP = [2, 128, 128, 128, 1]
+        training_config.kappas = [1.8, 1.3]
+        training_config.x0s = [8, 7]
+        training_config.lr = 1e-3
+        training_config.T = 1
+        training_config.L = 10
+        training_config.Lmax = 15
+        training_config.lambda_BC = 1
+        training_config.lambda_kdv = 1
+        training_config.vmin = 0
+        training_config.vmax = 3
+
     torch.manual_seed(training_config.seed)
+    print(f"Using config: kappas={training_config.kappas}, x0s={training_config.x0s}")
     print(f"Lmax = {training_config.Lmax}")
 
     print("=== Analytic Solution ===")

@@ -29,60 +29,78 @@ def run_parameter_sweep(base_dir='sweep_results'):
         },
         2: {
             'kappas': [
-                [1.8, 1.3],
+                [1.8, 1.3],  # Standard: large to small, ordered positions
                 [2.0, 1.0],
                 [1.5, 1.0],
                 [1.8, 1.0],
-                [2.0, 1.5]
+                [2.0, 1.5],
+                [1.8, 1.3],  # Shuffled positions
+                [2.0, 1.0],  # Mixed ordering
             ],
             'x0s': [
-                [8, 7],
+                [8, 7],      # Standard
                 [10, 5],
                 [8, 0],
                 [10, 0],
-                [5, 0]
+                [5, 0],
+                [5, 10],     # Reversed: slower in front
+                [0, 8],      # Mixed
             ]
         },
         3: {
             'kappas': [
-                [1.8, 1.3, 0.8],
+                [1.8, 1.3, 0.8],  # Standard: large to small
                 [2.0, 1.5, 1.0],
                 [1.5, 1.2, 0.9],
                 [2.0, 1.2, 0.8],
-                [1.8, 1.5, 1.0]
+                [1.8, 1.5, 1.0],
+                [1.8, 1.3, 0.8],  # Shuffled positions
+                [2.0, 1.5, 1.0],  # Reversed positions
+                [1.5, 1.2, 0.9],  # Random order
             ],
             'x0s': [
-                [10, 5, 0],
+                [10, 5, 0],       # Standard: ordered
                 [12, 6, 0],
                 [8, 4, 0],
                 [10, 5, -5],
-                [12, 8, 4]
+                [12, 8, 4],
+                [5, 0, 10],       # Shuffled: middle, slow, fast
+                [0, 5, 10],       # Reversed: slowest in front
+                [10, 0, 5],       # Random: fast, slow, middle
             ]
         },
         5: {
             'kappas': [
-                [2.0, 1.8, 1.5, 1.2, 0.9],
+                [2.0, 1.8, 1.5, 1.2, 0.9],  # Standard: large to small
                 [2.0, 1.6, 1.3, 1.0, 0.7],
                 [1.8, 1.5, 1.2, 0.9, 0.6],
                 [2.2, 1.8, 1.4, 1.0, 0.8],
+                [2.0, 1.8, 1.5, 1.2, 0.9],  # Shuffled positions
+                [2.0, 1.6, 1.3, 1.0, 0.7],  # Reversed positions
             ],
             'x0s': [
-                [15, 12, 8, 4, 0],
+                [15, 12, 8, 4, 0],          # Standard: ordered
                 [18, 14, 10, 6, 2],
                 [16, 12, 8, 4, -2],
                 [20, 15, 10, 5, 0],
+                [8, 0, 15, 4, 12],          # Shuffled: middle, slow, fastest, slow-mid, fast-mid
+                [0, 4, 8, 12, 15],          # Reversed: slowest in front
             ]
         },
         7: {
             'kappas': [
-                [2.0, 1.8, 1.6, 1.4, 1.2, 1.0, 0.8],
+                [2.0, 1.8, 1.6, 1.4, 1.2, 1.0, 0.8],  # Standard: large to small
                 [2.2, 1.9, 1.6, 1.3, 1.0, 0.8, 0.6],
                 [2.0, 1.7, 1.5, 1.3, 1.1, 0.9, 0.7],
+                [2.0, 1.8, 1.6, 1.4, 1.2, 1.0, 0.8],  # Shuffled positions
+                [2.2, 1.9, 1.6, 1.3, 1.0, 0.8, 0.6],  # Reversed positions
             ],
             'x0s': [
-                [20, 16, 12, 8, 4, 0, -4],
+                [20, 16, 12, 8, 4, 0, -4],             # Standard: ordered
                 [24, 20, 16, 12, 8, 4, 0],
                 [22, 18, 14, 10, 6, 2, -2],
+                [12, -4, 20, 4, 16, 8, 0],             # Shuffled: middle, slowest, fastest, etc
+                [-4, 0, 4, 8, 12, 16, 20],             # Reversed: slowest in front
             ]
         }
     }
@@ -123,10 +141,10 @@ def run_parameter_sweep(base_dir='sweep_results'):
                 # Configure this run
                 kdv_config.kappas = kappas
                 kdv_config.x0s = x0s
-                kdv_config.num_epochs = 5000
-                kdv_config.num_pretrain_epochs = 2500
+                kdv_config.num_epochs = 5
+                kdv_config.num_pretrain_epochs = 5
                 kdv_config.num_samp_bulk = 96
-                kdv_config.num_samp_eval = 512
+                kdv_config.num_samp_eval = 128
                 kdv_config.plot_interval = 50
                 kdv_config.MLP = [2, 128, 128, 128, 1]
                 kdv_config.lr = 1e-3
@@ -138,8 +156,14 @@ def run_parameter_sweep(base_dir='sweep_results'):
                 kdv_config.vmin = 0
                 kdv_config.vmax = 3
 
+                # Mark config as pre-configured so validate_run doesn't override
+                kdv_config._configured = True
+
                 # Run validation
                 metrics = validate_run(output_dir=output_dir)
+
+                # Clear the flag for next run
+                delattr(kdv_config, '_configured')
 
                 successful_runs.append({
                     'name': run_name,
