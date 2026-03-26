@@ -73,7 +73,7 @@ def initialize_session_state():
     if 'T' not in st.session_state:
         st.session_state.T = 3
     if 'num_samp_eval' not in st.session_state:
-        st.session_state.num_samp_eval = 64
+        st.session_state.num_samp_eval = 256
     if 'use_tau' not in st.session_state:
         st.session_state.use_tau = True
     if 'vmax' not in st.session_state:
@@ -188,12 +188,6 @@ with st.sidebar:
     st.session_state.T = new_T
     st.session_state.num_samp_eval = new_num_samp
     st.session_state.vmax = new_vmax
-
-    st.subheader("Computation Options")
-    new_use_tau = st.checkbox("Use tau method", value=st.session_state.use_tau, key="tau_checkbox")
-    if new_use_tau != st.session_state.use_tau:
-        st.session_state.config_changed = True
-    st.session_state.use_tau = new_use_tau
 
 if len(st.session_state.kappas) == 0:
     st.warning("Please add at least one soliton")
@@ -383,48 +377,8 @@ anim = FuncAnimation(fig_anim, animate, init_func=init,
 
 st.components.v1.html(anim.to_jshtml(), height=700, scrolling=True)
 
-st.header("Validation Results")
-
 with st.spinner("Running validation checks..."):
     results = S.check_SD(sd, input_eval, verbose=False)
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("MSE (Eigenvalues)", f"{results['mse_eigenvalues']:.2e}")
-with col2:
-    st.metric("Mean Time Variance", f"{results['mean_time_variance']:.2e}")
-with col3:
-    st.metric("MSE (Time Evolution)", f"{results['mse_psi_time']:.2e}")
-
-eigenvalue_pass = results['mse_eigenvalues'] < 1e-3 and results['mean_time_variance'] < 1e-6
-time_pass = results['mse_psi_time'] < 1e-2
-
-evs_t0 = eigenvalue_stack[0]
-max_ev_error = max([abs(evs_t0[i] - results['expected_eigenvalues'][i]) for i in range(n_kappas)])
-max_time_var = max([np.var(eigenvalue_stack[:, i]) for i in range(n_kappas)])
-
-if eigenvalue_pass:
-    st.success(f"✓ Eigenvalues are isospectral (max error: {max_ev_error:.2e}, max time variance: {max_time_var:.2e})")
-else:
-    st.error(f"✗ Eigenvalues fail isospectrality check (max error: {max_ev_error:.2e}, max time variance: {max_time_var:.2e})")
-    st.caption(f"Threshold: error < 1e-3 and time variance < 1e-6")
-
-if time_pass:
-    st.success(f"✓ Eigenvectors have correct time dependence (MSE: {results['mse_psi_time']:.2e})")
-else:
-    st.error(f"✗ Eigenvectors time evolution is incorrect (MSE: {results['mse_psi_time']:.2e})")
-    st.caption(f"Threshold: MSE < 1e-2")
-
-with st.expander("Expected vs Computed Eigenvalues"):
-    st.markdown("**Eigenvalue Comparison Table**")
-    ev_data = {
-        "n": list(range(n_kappas)),
-        "$\\kappa$": [f"{k:.3f}" for k in kappas_sorted],
-        "Expected $\\lambda$": [f"{ev:.4f}" for ev in results['expected_eigenvalues'][:n_kappas]],
-        "Computed $\\lambda$ (t=0)": [f"{evs_t0[n]:.4f}" for n in range(n_kappas)],
-        "Error": [f"{abs(evs_t0[n] - results['expected_eigenvalues'][n]):.2e}" for n in range(n_kappas)]
-    }
-    st.table(ev_data)
 
 # Kappa Recovery Plot
 st.header("Recovered Wave Numbers ($\\kappa$)")
@@ -473,7 +427,8 @@ for idx in range(n_kappas):
         st.metric(
             label=f"$\\kappa_{{{idx}}}$",
             value=f"{kappa_mean:.4f}",
-            delta=f"±{kappa_std:.2e} std"
+            delta=f"±{kappa_std:.2e} std",
+            border=True
         )
         st.caption(f"Expected: {kappas_sorted[idx]:.4f}")
         st.caption(f"Error: {kappa_error:.2e}")
