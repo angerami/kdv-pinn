@@ -36,16 +36,24 @@ def plot_scattering_validation(sd, kappa_rec, eigenvector_stack, eigenvalue_stac
 
     Args:
         sd: ScatteringData object
-        kappa_rec: Recovered kappa values over time
+        kappa_rec: Recovered kappa values over time (sorted largest to smallest)
         eigenvector_stack: Time series of eigenfunctions
         eigenvalue_stack: Time series of eigenvalues
         tvals: Time values
         dx: Spatial grid spacing
         output_dir: Directory for saving plots
         squared: If True, plot |ψ|², else plot ψ
+
+    Note:
+        kappa_rec comes from eigenvalue solver which always returns eigenvalues sorted.
+        Since λ = -κ², the most negative eigenvalue corresponds to the largest κ.
+        We sort sd.kappas to match this ordering for comparison.
     """
     vmin, vmax = (0, 0.1) if squared else (-0.3, 0.3)
     label_suffix = '^2' if squared else ''
+
+    # Sort kappas to match the eigenvalue solver ordering (largest first)
+    kappas_sorted = sorted(sd.kappas, reverse=True)
 
     # Plot eigenfunctions
     fig = plt.figure(figsize=(12, 3))
@@ -73,15 +81,17 @@ def plot_scattering_validation(sd, kappa_rec, eigenvector_stack, eigenvalue_stac
     plt.close()
 
     # Single-panel kappa recovery plot
+    # Compare recovered kappas (sorted) to ground truth kappas (sorted)
     _, ax = plt.subplots(figsize=(8, 4))
     for idx in range(sd.Ns):
-        line, = ax.plot(tvals[1:], kappa_rec[:, idx], label=f'$\\kappa_{{{idx}}}$ (recovered)')
-        ax.axhline(sd.kappas[idx], color=line.get_color(), linestyle='--', alpha=0.7)
-    ax.set_ylim(0, max(sd.kappas) * 1.3)
+        kappa_true = kappas_sorted[idx]
+        line, = ax.plot(tvals[1:], kappa_rec[:, idx], label=f'$\\kappa_{{{idx}}}$ (recovered, κ={kappa_true:.2f})')
+        ax.axhline(kappa_true, color=line.get_color(), linestyle='--', alpha=0.7)
+    ax.set_ylim(0, max(kappas_sorted) * 1.3)
     ax.set_ylabel('$\\kappa$')
     ax.set_xlabel('$t$')
     ax.legend()
-    ax.set_title('Recovered Wave Numbers')
+    ax.set_title('Recovered Wave Numbers (sorted by magnitude)')
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(f'{output_dir}/kappa_recovery.png', dpi=150, bbox_inches='tight')
@@ -93,14 +103,21 @@ def compute_metrics(sd, kappa_rec, results, results_ana):
 
     Args:
         sd: ScatteringData object
-        kappa_rec: Recovered kappa values
+        kappa_rec: Recovered kappa values (sorted largest to smallest)
         results: PINN field results (detached)
         results_ana: Analytic field results (detached)
 
     Returns:
         Dictionary of metrics
+
+    Note:
+        kappa_rec is sorted (largest first) to match eigenvalue solver output.
+        We sort sd.kappas to match for metric computation.
     """
-    # Input parameters
+    # Sort kappas to match kappa_rec ordering
+    kappas_sorted = sorted(sd.kappas, reverse=True)
+
+    # Input parameters (store original unsorted values)
     input_params = {
         'n_solitons': sd.Ns,
     }
@@ -109,14 +126,15 @@ def compute_metrics(sd, kappa_rec, results, results_ana):
         input_params[f'x0_{i}_input'] = sd.x0[i]
         input_params[f'c0_{i}_input'] = sd.c0[i]
 
-    # Kappa recovery metrics
+    # Kappa recovery metrics (compare sorted values)
     kappa_metrics = {}
     for i in range(sd.Ns):
         kappa_mean = kappa_rec[:, i].mean()
         kappa_std = kappa_rec[:, i].std()
-        kappa_true = sd.kappas[i]
+        kappa_true = kappas_sorted[i]  # Use sorted kappas
         kappa_metrics[f'kappa_{i}_mean'] = kappa_mean
         kappa_metrics[f'kappa_{i}_std'] = kappa_std
+        kappa_metrics[f'kappa_{i}_true'] = kappa_true  # Store which true value this corresponds to
         kappa_metrics[f'kappa_{i}_error'] = np.abs(kappa_mean - kappa_true)
 
     # Field errors

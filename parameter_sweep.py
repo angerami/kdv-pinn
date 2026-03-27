@@ -21,86 +21,100 @@ def run_parameter_sweep(base_dir='sweep_results'):
     """
     os.makedirs(base_dir, exist_ok=True)
 
-    # Define parameter ranges for each number of solitons
+    # Explicit sweep configurations with interesting collision dynamics
+    # Focus on: fast chasers, multiple crossings, cascade collisions, speed variety
     sweep_configs = {
         1: {
-            'kappas': [[1.0], [1.2], [1.5], [1.8], [2.0]],
-            'x0s': [[0], [5], [-5], [8], [-8]]
+            'kappas': [[1.0], [1.5], [2.0], [2.5]],
+            'x0s': [[0], [5], [-5], [10]]
         },
         2: {
             'kappas': [
-                [1.8, 1.3],  # Standard: large to small, ordered positions
-                [2.0, 1.0],
-                [1.5, 1.0],
-                [1.8, 1.0],
-                [2.0, 1.5],
-                [1.8, 1.3],  # Shuffled positions
-                [2.0, 1.0],  # Mixed ordering
+                # Fast chaser scenarios - dramatic catch-ups
+                [2.5, 0.8],  # Very fast catching very slow
+                [2.0, 1.0],  # Classic fast chaser
+                [3.0, 1.5],  # Super fast catching medium
+                # Similar speeds - minimal interaction
+                [1.5, 1.4],  # Almost matched speeds, should barely interact
+                [2.0, 1.9],  # Very close speeds
+                # Reverse - slow in front (no collision expected)
+                [0.9, 2.0],  # Slow leads, fast behind - shouldn't collide
+                # Widely separated
+                [3.5, 0.6],  # Extreme speed difference
+                [2.2, 1.1],  # 2:1 speed ratio
             ],
             'x0s': [
-                [8, 7],      # Standard
-                [10, 5],
-                [8, 0],
-                [10, 0],
-                [5, 0],
-                [5, 10],     # Reversed: slower in front
-                [0, 8],      # Mixed
+                [-10, 5],    # Fast far behind, has to chase
+                [-8, 0],     # Fast behind slow
+                [-15, 3],    # Fast very far behind
+                [0, 0.5],    # Nearly overlapping, similar speeds
+                [0, 1],      # Slightly separated, similar speeds
+                [5, -10],    # Slow in front, fast way behind (no collision)
+                [-12, 2],    # Extreme chase scenario
+                [-10, 0],    # Fast chaser from behind
             ]
         },
         3: {
             'kappas': [
-                [1.8, 1.3, 0.8],  # Standard: large to small
-                [2.0, 1.5, 1.0],
-                [1.5, 1.2, 0.9],
-                [2.0, 1.2, 0.8],
-                [1.8, 1.5, 1.0],
-                [1.8, 1.3, 0.8],  # Shuffled positions
-                [2.0, 1.5, 1.0],  # Reversed positions
-                [1.5, 1.2, 0.9],  # Random order
+                # Cascade: fast catches middle, then catches slow
+                [3.0, 1.5, 0.8],   # Clear cascade progression
+                [2.5, 1.3, 0.7],   # Another cascade
+                # One fast, two slow and close
+                [3.0, 1.0, 0.9],   # Fast guy catches tight pair
+                # Fast guy in middle (by speed, not position)
+                [2.5, 0.9, 1.6],   # Slow in middle by speed
+                [2.0, 1.0, 1.8],   # Middle is slowest
+                # Fast guy way in back catches everyone
+                [3.5, 1.2, 1.0],   # One super fast chaser
+                # Cluster of similar speeds
+                [1.5, 1.4, 1.45],  # Very tight cluster - minimal dynamics
+                # Wide spread
+                [3.0, 1.5, 0.6],   # Evenly spread speeds
             ],
             'x0s': [
-                [10, 5, 0],       # Standard: ordered
-                [12, 6, 0],
-                [8, 4, 0],
-                [10, 5, -5],
-                [12, 8, 4],
-                [5, 0, 10],       # Shuffled: middle, slow, fast
-                [0, 5, 10],       # Reversed: slowest in front
-                [10, 0, 5],       # Random: fast, slow, middle
+                [-15, -2, 5],      # Fast way back, catches middle then slow
+                [-12, -3, 4],      # Cascade scenario
+                [-15, 2, 3],       # Fast catches tight pair
+                [-10, 3, -4],      # Slow in middle position
+                [-8, 5, -6],       # Similar mixed ordering
+                [-20, 2, 0],       # Fast very far behind everyone
+                [0, 0.5, 1],       # Tight cluster in space
+                [-15, -5, 5],      # Evenly spaced
             ]
         },
         5: {
             'kappas': [
-                [2.0, 1.8, 1.5, 1.2, 0.9],  # Standard: large to small
-                [2.0, 1.6, 1.3, 1.0, 0.7],
-                [1.8, 1.5, 1.2, 0.9, 0.6],
-                [2.2, 1.8, 1.4, 1.0, 0.8],
-                [2.0, 1.8, 1.5, 1.2, 0.9],  # Shuffled positions
-                [2.0, 1.6, 1.3, 1.0, 0.7],  # Reversed positions
+                # One super fast guy chasing pack
+                [4.0, 1.2, 1.0, 0.8, 0.6],   # Single fast chaser
+                [3.5, 1.4, 1.1, 0.9, 0.7],   # Fast chaser with graduated pack
+                # Two fast chasers
+                [3.0, 2.5, 0.9, 0.8, 0.7],   # Two fast, three slow clustered
+                [2.8, 2.2, 1.0, 0.9, 0.8],   # Two fast, tight slow pack
+                # Mixed speeds (not monotonic)
+                [2.5, 1.0, 2.0, 0.8, 1.5],   # Interleaved speeds
+                [3.0, 0.7, 2.0, 1.0, 1.5],   # More speed mixing
             ],
             'x0s': [
-                [15, 12, 8, 4, 0],          # Standard: ordered
-                [18, 14, 10, 6, 2],
-                [16, 12, 8, 4, -2],
-                [20, 15, 10, 5, 0],
-                [8, 0, 15, 4, 12],          # Shuffled: middle, slow, fastest, slow-mid, fast-mid
-                [0, 4, 8, 12, 15],          # Reversed: slowest in front
+                [-25, 3, 5, 7, 9],           # Fast way behind pack
+                [-20, 2, 4, 6, 8],           # Fast chaser
+                [-15, -12, 4, 6, 8],         # Two fast chasers
+                [-12, -10, 3, 5, 7],         # Two fast back, tight pack ahead
+                [-10, 5, -8, 8, -2],         # Interleaved positions
+                [-15, 10, -5, 3, 0],         # Mixed positions
             ]
         },
         7: {
             'kappas': [
-                [2.0, 1.8, 1.6, 1.4, 1.2, 1.0, 0.8],  # Standard: large to small
-                [2.2, 1.9, 1.6, 1.3, 1.0, 0.8, 0.6],
-                [2.0, 1.7, 1.5, 1.3, 1.1, 0.9, 0.7],
-                [2.0, 1.8, 1.6, 1.4, 1.2, 1.0, 0.8],  # Shuffled positions
-                [2.2, 1.9, 1.6, 1.3, 1.0, 0.8, 0.6],  # Reversed positions
+                # Multiple fast chasers
+                [4.0, 3.0, 1.0, 0.9, 0.8, 0.7, 0.6],  # Two fast, pack of slow
+                [3.5, 2.5, 2.0, 0.9, 0.8, 0.75, 0.7], # Three fast, pack of slow
+                # Interleaved
+                [3.0, 1.0, 2.5, 0.9, 2.0, 0.8, 1.5],  # Completely mixed speeds
             ],
             'x0s': [
-                [20, 16, 12, 8, 4, 0, -4],             # Standard: ordered
-                [24, 20, 16, 12, 8, 4, 0],
-                [22, 18, 14, 10, 6, 2, -2],
-                [12, -4, 20, 4, 16, 8, 0],             # Shuffled: middle, slowest, fastest, etc
-                [-4, 0, 4, 8, 12, 16, 20],             # Reversed: slowest in front
+                [-30, -20, 5, 7, 9, 11, 13],          # Two fast way back
+                [-25, -15, -10, 6, 8, 10, 12],        # Three fast back
+                [-15, 8, -12, 10, -8, 12, -2],        # Interleaved positions
             ]
         }
     }
@@ -141,8 +155,8 @@ def run_parameter_sweep(base_dir='sweep_results'):
                 # Configure this run
                 kdv_config.kappas = kappas
                 kdv_config.x0s = x0s
-                kdv_config.num_epochs = 5
-                kdv_config.num_pretrain_epochs = 5
+                kdv_config.num_epochs = 5000
+                kdv_config.num_pretrain_epochs = 2500
                 kdv_config.num_samp_bulk = 96
                 kdv_config.num_samp_eval = 128
                 kdv_config.plot_interval = 50

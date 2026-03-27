@@ -31,15 +31,21 @@ else:
         device = torch.device("cpu")
 
 PRESETS = {
+     "1-Soliton": {
+        "kappas": [1],
+        "x0s": [0],
+        "L": 30,
+        "T": 3,
+    },
     "2-Soliton": {
-        "kappas": [1.2, 0.9],
+        "kappas": [1.2, 0.8],
         "x0s": [8, 2],
         "L": 30,
         "T": 3,
     },
     "3-Soliton": {
         "kappas": [1.6, 1.2, 1.1],
-        "x0s": [8, 4, 2],
+        "x0s": [15, 8, 2],
         "L": 30,
         "T": 3,
     },
@@ -65,9 +71,9 @@ PRESETS = {
 
 def initialize_session_state():
     if 'kappas' not in st.session_state:
-        st.session_state.kappas = [1.2, 0.9]
+        st.session_state.kappas = [1]
     if 'x0s' not in st.session_state:
-        st.session_state.x0s = [8, 2]
+        st.session_state.x0s = [0]
     if 'L' not in st.session_state:
         st.session_state.L = 30
     if 'T' not in st.session_state:
@@ -99,6 +105,10 @@ with st.sidebar:
             st.session_state.L = preset_data["L"]
             st.session_state.T = preset_data["T"]
             st.session_state.config_changed = True
+            # Clear widget keys to prevent old values from persisting
+            for key in list(st.session_state.keys()):
+                if key.startswith('kappa_') or key.startswith('x0_'):
+                    del st.session_state[key]
 
     preset = st.selectbox(
         "Load Preset",
@@ -267,12 +277,19 @@ kappas_sorted = sorted(st.session_state.kappas, reverse=True)
 
 n_evs_to_show = min(n_kappas, eigenvector_stack.shape[2])
 
-ncols = min(4, n_evs_to_show)
+# Compute recovered kappa values for inset plots
+kappa_rec_all = np.sqrt(-eigenvalue_stack[:, :n_kappas] + 1e-8)
+tvals_ev = tvals[:-1]  # eigenvalue_stack has one less time point
+
+# Use 2 columns per row for larger plots
+ncols = 2
 nrows = (n_evs_to_show + ncols - 1) // ncols
 
-fig2, axes = plt.subplots(nrows, ncols, figsize=(ncols * 4, nrows * 3))
+fig2, axes = plt.subplots(nrows, ncols, figsize=(ncols * 7, nrows * 4.5))
 if nrows == 1 and ncols == 1:
     axes = np.array([axes])
+elif nrows == 1:
+    axes = axes.reshape(1, -1)
 axes = axes.flatten()
 
 for i in range(n_evs_to_show):
@@ -283,19 +300,24 @@ for i in range(n_evs_to_show):
     im = axes[i].imshow(eigenvector_timeseries, aspect='auto', origin='lower',
                         extent=[x_d.min(), x_d.max(), 0, T],
                         cmap='RdBu_r')
-    axes[i].set_xlabel('$x$', fontsize=10)
-    axes[i].set_ylabel('$t$', fontsize=10)
+    axes[i].set_xlabel('$x$', fontsize=11)
+    axes[i].set_ylabel('$t$', fontsize=11)
 
     evs_t0 = eigenvalue_stack[0]
     lambda_i = evs_t0[i]
     kappa_i = kappas_sorted[i]
     expected = -kappa_i**2
 
+    # Compute mean kappa over time
+    kappa_mean = kappa_rec_all[:, i].mean()
+
     if st.session_state.psi_squared:
-        axes[i].set_title(f'$|\\psi_{{{i}}}|^2$\n$\\lambda = {lambda_i:.3f}$, $-\\kappa^2 = {expected:.3f}$', fontsize=11)
+        title_text = f'$|\\psi_{{{i}}}|^2$   $\\langle\\kappa\\rangle = {kappa_mean:.3f}$'
     else:
-        axes[i].set_title(f'$\\psi_{{{i}}}$\n$\\lambda = {lambda_i:.3f}$, $-\\kappa^2 = {expected:.3f}$', fontsize=11)
-    plt.colorbar(im, ax=axes[i])
+        title_text = f'$\\psi_{{{i}}}$   $\\langle\\kappa\\rangle = {kappa_mean:.3f}$'
+    axes[i].set_title(title_text, fontsize=12, pad=10)
+
+    plt.colorbar(im, ax=axes[i], fraction=0.046, pad=0.04)
 
 for i in range(n_evs_to_show, len(axes)):
     axes[i].axis('off')
@@ -304,15 +326,82 @@ plt.tight_layout()
 st.pyplot(fig2)
 plt.close()
 
+
+with st.spinner("Running validation checks..."):
+    results = S.check_SD(sd, input_eval, verbose=False)
+
+# Kappa Recovery Plot
+st.header("Recovered Wave Numbers ($\\kappa$)")
+st.markdown("Verifying that wave numbers $\\kappa_n = \\sqrt{-\\lambda_n}$ remain constant over time (isospectrality).")
+
+# Use the kappa values already computed for the inset plots
+kappa_rec = kappa_rec_all
+
+fig_kappa, ax_kappa = plt.subplots(figsize=(10, 5))
+for idx in range(n_kappas):
+    line, = ax_kappa.plot(tvals[:-1], kappa_rec[:, idx],
+                           label=f'$\\kappa_{{{idx}}}$ (recovered)',
+                           linewidth=2, alpha=0.8)
+    # Plot expected value as horizontal line
+    ax_kappa.axhline(kappas_sorted[idx],
+                     color=line.get_color(),
+                     linestyle='--',
+                     linewidth=1.5,
+                     alpha=0.7,
+                     label=f'$\\kappa_{{{idx}}}$ (expected: {kappas_sorted[idx]:.3f})')
+
+ax_kappa.set_xlabel('Time $t$', fontsize=12)
+ax_kappa.set_ylabel('Wave Number $\\kappa$', fontsize=12)
+ax_kappa.set_title('Recovered Wave Numbers from Eigenvalues', fontsize=14)
+ax_kappa.legend(loc='best', fontsize=10)
+ax_kappa.grid(True, alpha=0.3)
+
+# Set reasonable y-limits
+kappa_min = min(kappas_sorted) * 0.8
+kappa_max = max(kappas_sorted) * 1.2
+ax_kappa.set_ylim(kappa_min, kappa_max)
+
+plt.tight_layout()
+st.pyplot(fig_kappa)
+plt.close()
+
+# Show statistics
+st.subheader("Kappa Recovery Statistics")
+cols = st.columns(n_kappas)
+for idx in range(n_kappas):
+    with cols[idx]:
+        kappa_mean = kappa_rec[:, idx].mean()
+        kappa_std = kappa_rec[:, idx].std()
+        kappa_error = abs(kappa_mean - kappas_sorted[idx])
+
+        st.metric(
+            label=f"$\\kappa_{{{idx}}}$",
+            value=f"{kappa_mean:.4f}",
+            delta=f"±{kappa_std:.2e} std",
+            border=True
+        )
+        st.caption(f"Expected: {kappas_sorted[idx]:.4f}")
+        st.caption(f"Error: {kappa_error:.2e}")
+
+st.sidebar.markdown("---")
+st.sidebar.info(f"Using device: {device}")
+st.sidebar.info(f"Number of solitons: {len(st.session_state.kappas)}")
+
+## ANIMATION 
+
 st.header("Animation")
 
 n_evs = min(n_kappas, 8)
 x_interior = x_d[1:-1]
 
 fig_anim, ax_anim = plt.subplots(figsize=(12, 6))
+# Reduce padding to match static plots better
+fig_anim.tight_layout(pad=0.5)
 
-frame_skip = max(1, len(tvals) // 100)
-frames_to_use = list(range(0, len(tvals), frame_skip))
+# eigenvector_stack has shape (num_samp_eval-1, ...) so we need to limit frames
+max_frame = min(len(tvals), eigenvector_stack.shape[0])
+frame_skip = max(1, max_frame // 100)
+frames_to_use = list(range(0, max_frame, frame_skip))
 
 colors = plt.cm.viridis(np.linspace(0, 0.9, n_evs))
 
@@ -376,63 +465,3 @@ anim = FuncAnimation(fig_anim, animate, init_func=init,
                     frames=frames_to_use, interval=50, blit=True, repeat=True)
 
 st.components.v1.html(anim.to_jshtml(), height=700, scrolling=True)
-
-with st.spinner("Running validation checks..."):
-    results = S.check_SD(sd, input_eval, verbose=False)
-
-# Kappa Recovery Plot
-st.header("Recovered Wave Numbers ($\\kappa$)")
-st.markdown("Verifying that wave numbers $\\kappa_n = \\sqrt{-\\lambda_n}$ remain constant over time (isospectrality).")
-
-# Compute recovered kappa values: κ = sqrt(-λ)
-kappa_rec = np.sqrt(-eigenvalue_stack[:, :n_kappas] + 1e-8)
-
-fig_kappa, ax_kappa = plt.subplots(figsize=(10, 5))
-for idx in range(n_kappas):
-    line, = ax_kappa.plot(tvals[:-1], kappa_rec[:, idx],
-                           label=f'$\\kappa_{{{idx}}}$ (recovered)',
-                           linewidth=2, alpha=0.8)
-    # Plot expected value as horizontal line
-    ax_kappa.axhline(kappas_sorted[idx],
-                     color=line.get_color(),
-                     linestyle='--',
-                     linewidth=1.5,
-                     alpha=0.7,
-                     label=f'$\\kappa_{{{idx}}}$ (expected: {kappas_sorted[idx]:.3f})')
-
-ax_kappa.set_xlabel('Time $t$', fontsize=12)
-ax_kappa.set_ylabel('Wave Number $\\kappa$', fontsize=12)
-ax_kappa.set_title('Recovered Wave Numbers from Eigenvalues', fontsize=14)
-ax_kappa.legend(loc='best', fontsize=10)
-ax_kappa.grid(True, alpha=0.3)
-
-# Set reasonable y-limits
-kappa_min = min(kappas_sorted) * 0.8
-kappa_max = max(kappas_sorted) * 1.2
-ax_kappa.set_ylim(kappa_min, kappa_max)
-
-plt.tight_layout()
-st.pyplot(fig_kappa)
-plt.close()
-
-# Show statistics
-st.subheader("Kappa Recovery Statistics")
-cols = st.columns(n_kappas)
-for idx in range(n_kappas):
-    with cols[idx]:
-        kappa_mean = kappa_rec[:, idx].mean()
-        kappa_std = kappa_rec[:, idx].std()
-        kappa_error = abs(kappa_mean - kappas_sorted[idx])
-
-        st.metric(
-            label=f"$\\kappa_{{{idx}}}$",
-            value=f"{kappa_mean:.4f}",
-            delta=f"±{kappa_std:.2e} std",
-            border=True
-        )
-        st.caption(f"Expected: {kappas_sorted[idx]:.4f}")
-        st.caption(f"Error: {kappa_error:.2e}")
-
-st.sidebar.markdown("---")
-st.sidebar.info(f"Using device: {device}")
-st.sidebar.info(f"Number of solitons: {len(st.session_state.kappas)}")
