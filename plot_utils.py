@@ -2,6 +2,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation, PillowWriter
 from physics import kdv
 
 
@@ -249,14 +250,33 @@ def load_equations(md_path):
     Parses markdown comments to extract LaTeX equation labels.
 
     Args:
-        md_path: Path to markdown file with equation annotations
+        md_path: Path to markdown file with equation annotations.
+                Can be absolute, or relative to either:
+                - Current working directory
+                - The kdv-pinn package directory (fallback)
 
     Returns:
         eqs: Dictionary mapping variable names to LaTeX labels
         descs: Dictionary mapping variable names to descriptions
     """
     import re
-    with open(md_path) as f:
+    import os
+
+    # Try the path as-is first (absolute or relative to cwd)
+    if os.path.exists(md_path):
+        full_path = md_path
+    else:
+        # Fallback: look relative to this module's directory (kdv-pinn root)
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+        full_path = os.path.join(module_dir, md_path)
+
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(
+                f"Cannot find equation file '{md_path}'. "
+                f"Tried: current directory and {module_dir}"
+            )
+
+    with open(full_path) as f:
         text = f.read()
 
     eqs = {}
@@ -268,3 +288,176 @@ def load_equations(md_path):
         descs[m.group(1)] = m.group(2).strip()
 
     return eqs, descs
+
+
+def plot_scattering_validation(sd, kappa_rec, eigenvector_stack, eigenvalue_stack, tvals, dx, output_dir, squared=True):
+    """Plot eigenfunction evolution and recovered wave numbers.
+
+    Args:
+        sd: ScatteringData object
+        kappa_rec: Recovered kappa values over time (sorted largest to smallest)
+        eigenvector_stack: Time series of eigenfunctions
+        eigenvalue_stack: Time series of eigenvalues
+        tvals: Time values
+        dx: Spatial grid spacing
+        output_dir: Directory for saving plots
+        squared: If True, plot |ψ|², else plot ψ
+
+    Note:
+        kappa_rec comes from eigenvalue solver which always returns eigenvalues sorted.
+        Since λ = -κ², the most negative eigenvalue corresponds to the largest κ.
+        We sort sd.kappas to match this ordering for comparison.
+    """
+    vmin, vmax = (0, 0.1) if squared else (-0.3, 0.3)
+    label_suffix = '^2' if squared else ''
+
+    # Sort kappas to match the eigenvalue solver ordering (largest first)
+    kappas_sorted = sorted(sd.kappas, reverse=True)
+
+    # Plot eigenfunctions
+    fig = plt.figure(figsize=(12, 3))
+    axes = []
+
+    for ev_idx in range(sd.Ns):
+        ax = fig.add_subplot(1, sd.Ns, ev_idx + 1)
+        axes.append(ax)
+        eigenvector_timeseries = eigenvector_stack[:, :, ev_idx]
+        if squared:
+            eigenvector_timeseries = eigenvector_timeseries**2
+        im = ax.imshow(eigenvector_timeseries,
+                       vmin=vmin, vmax=vmax,
+                       origin='lower', cmap='coolwarm')
+        ax.set_xlabel('$x$')
+        ax.set_ylabel('$t$')
+        ax.set_title(f'$\\psi_{{{ev_idx}}}{label_suffix}(x,t)$')
+
+    fig.subplots_adjust(right=0.9)
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    fig.colorbar(im, cax=cbar_ax)
+
+    suffix = '_squared' if squared else ''
+    plt.savefig(f'{output_dir}/eigenvectors{suffix}.png', dpi=150, bbox_inches='tight')
+    plt.close()
+
+    # Single-panel kappa recovery plot
+    # Compare recovered kappas (sorted) to ground truth kappas (sorted)
+    _, ax = plt.subplots(figsize=(8, 4))
+    for idx in range(sd.Ns):
+        kappa_true = kappas_sorted[idx]
+        line, = ax.plot(tvals[1:], kappa_rec[:, idx], label=f'$\\kappa_{{{idx}}}$ (recovered, κ={kappa_true:.2f})')
+        ax.axhline(kappa_true, color=line.get_color(), linestyle='--', alpha=0.7)
+    ax.set_ylim(0, max(kappas_sorted) * 1.3)
+    ax.set_ylabel('$\\kappa$')
+    ax.set_xlabel('$t$')
+    ax.legend()
+    ax.set_title('Recovered Wave Numbers (sorted by magnitude)')
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/kappa_recovery.png', dpi=150, bbox_inches='tight')
+    plt.close()
+
+
+def generate_animation(u, eigenvector_stack, eigenvalue_stack, tvals, x_d, sd, output_path,
+                       squared=False, fps=20, max_frames=100):
+    """Generate animation of potential and eigenfunctions over time.
+
+    Args:
+        u: Potential field u(x,t) as 2D array (time, space)
+        eigenvector_stack: Time series of eigenfunctions
+        eigenvalue_stack: Time series of eigenvalues
+        tvals: Time values
+        x_d: Spatial grid points
+        sd: ScatteringData object
+        output_path: Path to save animation (e.g., 'output/animation.gif')
+        squared: If True, plot |ψ|², else plot ψ
+        fps: Frames per second for the animation
+        max_frames: Maximum number of frames to include (skips frames if needed)
+    """
+    print(f"Generating animation: {output_path}")
+
+    n_evs = min(sd.Ns, 8, eigenvector_stack.shape[2])
+    x_interior = x_d[1:-1]
+
+    # Setup figure
+    fig_anim, ax_anim = plt.subplots(figsize=(12, 6))
+    fig_anim.tight_layout(pad=0.5)
+
+    # Determine frames to use (skip frames if too many)
+    max_frame = min(len(tvals), eigenvector_stack.shape[0])
+    frame_skip = max(1, max_frame // max_frames)
+    frames_to_use = list(range(0, max_frame, frame_skip))
+
+    # Color scheme for eigenfunctions
+    colors = plt.cm.viridis(np.linspace(0, 0.9, n_evs))
+
+    # Determine plot limits
+    u_max = np.abs(u).max()
+    u_min = np.min(u)
+    ev_max = np.max([np.abs(eigenvector_stack[:, :, i]).max() for i in range(n_evs)])
+
+    evs_t0 = eigenvalue_stack[0]
+
+    # Initialize lines
+    line_u, = ax_anim.plot([], [], 'k-', linewidth=2, label='$u(x,t)$')
+    lines_evs = []
+    for i in range(n_evs):
+        if squared:
+            label = f'$|\\psi_{{{i}}}|^2$ ($\\lambda$={evs_t0[i]:.2f})'
+        else:
+            label = f'$\\psi_{{{i}}}$ ($\\lambda$={evs_t0[i]:.2f})'
+        line, = ax_anim.plot([], [], linewidth=1.5, alpha=0.7,
+                            color=colors[i], label=label)
+        lines_evs.append(line)
+
+    # Set axis limits
+    ax_anim.set_xlim(x_d.min(), x_d.max())
+    global_max = max(u_min, ev_max * (u_max / ev_max) * 0.5)
+    ax_anim.set_ylim(-1.2 * u_max, 1.2 * global_max)
+                    #  global_max * 1.2, global_max * 1.2)
+
+    # Labels and styling
+    ax_anim.set_xlabel('$x$', fontsize=12)
+    if squared:
+        ax_anim.set_ylabel('$|\\psi|^2$', fontsize=12)
+    else:
+        ax_anim.set_ylabel('$\\psi$', fontsize=12)
+    ax_anim.legend(loc='upper right', fontsize=9)
+    ax_anim.grid(True, alpha=0.3)
+
+    # Time text overlay
+    time_text = ax_anim.text(0.02, 0.98, '', transform=ax_anim.transAxes,
+                            fontsize=14, verticalalignment='top',
+                            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    def init():
+        line_u.set_data([], [])
+        for line in lines_evs:
+            line.set_data([], [])
+        time_text.set_text('')
+        return [line_u] + lines_evs + [time_text]
+
+    def animate(frame):
+        u_slice = -u[frame, :] - u_min
+        line_u.set_data(x_d, u_slice)
+
+        for i in range(n_evs):
+            psi = eigenvector_stack[frame, :, i]
+            if squared:
+                psi = psi**2
+            psi_scaled = psi * (u_max / ev_max) * 0.5
+            lines_evs[i].set_data(x_interior, psi_scaled)
+
+        time_text.set_text(f't = {tvals[frame]:.3f}')
+
+        return [line_u] + lines_evs + [time_text]
+
+    # Create animation
+    anim = FuncAnimation(fig_anim, animate, init_func=init,
+                        frames=frames_to_use, interval=1000/fps, blit=True, repeat=True)
+
+    # Save animation
+    writer = PillowWriter(fps=fps)
+    anim.save(output_path, writer=writer)
+    plt.close(fig_anim)
+
+    print(f"Animation saved to {output_path} ({len(frames_to_use)} frames @ {fps} fps)")

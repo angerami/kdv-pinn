@@ -33,6 +33,9 @@ kdv_config = SimpleNamespace(
     x0s=[1.4142],   # Initial positions
     m=0.5,          # Elliptic modulus for cnoidal waves
     x0=0.0,         # Position offset
+    # Animation parameters
+    anim_fps=20,           # Animation frames per second
+    anim_max_frames=100,   # Maximum number of frames in animation
 )
 
 

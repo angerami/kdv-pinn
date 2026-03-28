@@ -1,7 +1,7 @@
 # KdV PINN
 
 [![Post](https://img.shields.io/badge/📝-Read_the_Post-blue)](https://angerami.github.io/posts/2026/kdv-pinn/)
-[![Demo](https://img.shields.io/badge/🎮-Interactive_Demo-orange)](https://huggingface.co/spaces/angerami/kdv-pinn)
+[![Demo](https://img.shields.io/badge/📊-Interactive_Demo-orange)](https://huggingface.co/spaces/angerami/kdv-pinn)
 
 Physics-informed neural network for the Korteweg–de Vries equation, with boundary conditions specified through the inverse scattering transform rather than conventional Dirichlet/Neumann conditions. The KdV equation's integrability provides a rich validation framework: an infinite hierarchy of conservation laws serves as unsupervised diagnostics independent of the training loss, and the spectral structure of the associated Lax pair (isospectrality, eigenfunction dynamics) can be extracted and verified directly from the learned solution.
 
