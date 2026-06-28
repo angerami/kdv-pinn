@@ -2,6 +2,17 @@
 .claude/
 archive/
 
+# Scratch / notes workspace — never commit
+scratch/
+dev/
+notes/
+
+# MLflow tracking store — local sqlite
+mlruns/
+mlartifacts/
+mlflow.db
+mlflow.db-*
+
 # Python
 __pycache__/
 *.py[cod]
@@ -21,9 +32,15 @@ build/
 *.pth
 *.ckpt
 
-# Output directories
+# Output directories (regenerable / logged to MLflow)
 validation_output/
 validation_output_*/
+analytical_output/
+output/
+output_*/
+results/
+sweep_results/
+figures/
 
 # IDE
 .vscode/

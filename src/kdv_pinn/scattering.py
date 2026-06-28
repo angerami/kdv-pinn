@@ -7,7 +7,7 @@ Schrödinger eigenvalue problem to verify isospectrality.
 import torch
 import numpy as np
 from itertools import combinations
-from physics import gradient
+from .physics import gradient
 
 
 class ScatteringData:

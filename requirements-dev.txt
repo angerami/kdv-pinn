@@ -1,0 +1,4 @@
+# Dev / training setup: editable install of the package with train + dev extras
+# (MLflow, pytest, ruff). The Streamlit + HuggingFace deploy uses the lean
+# requirements.txt instead and never installs these.
+-e .[train,dev,foundation]

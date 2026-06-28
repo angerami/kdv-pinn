@@ -12,7 +12,7 @@ COPY requirements.txt ./
 RUN pip3 install torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip3 install -r requirements.txt
 
-COPY *.py ./
+COPY src/ ./src/
 COPY apps/ ./apps/
 
 EXPOSE 7860

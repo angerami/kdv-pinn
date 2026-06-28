@@ -6,7 +6,7 @@ kappas, and initial positions to generate a comprehensive dataset of validation 
 import os
 import numpy as np
 import itertools
-from validation import validate_run
+from kdv_pinn.validation import validate_run
 
 def run_parameter_sweep(base_dir='sweep_results'):
     """Run parameter sweep over multiple soliton configurations.
@@ -150,7 +150,7 @@ def run_parameter_sweep(base_dir='sweep_results'):
 
             try:
                 # Import here to set config per run
-                from configuration import kdv_config
+                from kdv_pinn.configuration import kdv_config
 
                 # Configure this run
                 kdv_config.kappas = kappas

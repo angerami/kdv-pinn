@@ -1,19 +1,18 @@
-# Add parent directory to path for imports
+# Make the kdv_pinn package importable whether or not it's pip-installed.
 import sys
 import os
-# Get the parent directory of the current file
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+_SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 
 import streamlit as st
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from scattering import ScatteringData, SchrodingerSolver
-from configuration import kdv_config
-from sampling import sample_bulk
+from kdv_pinn.scattering import ScatteringData, SchrodingerSolver
+from kdv_pinn.configuration import kdv_config
+from kdv_pinn.sampling import sample_bulk
 
 st.set_page_config(page_title="KdV Soliton Inspector", layout="wide")
 

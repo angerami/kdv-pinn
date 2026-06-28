@@ -3,19 +3,22 @@ import os
 import gc
 import torch
 import numpy as np
+import mlflow
 from types import SimpleNamespace
-from models import KdV_pinn
-from scattering import ScatteringData, SchrodingerSolver
-from train import train_pinn, pretrain
-from sampling import sample_bulk
-from configuration import kdv_config, config_to_dict
-from plot_utils import (
+from .models import KdV_pinn
+from .scattering import ScatteringData, SchrodingerSolver
+from .train import train_pinn, pretrain
+from .sampling import sample_bulk
+from .configuration import kdv_config, config_to_dict
+from .device import get_device
+from .mlflow_utils import start_run, register_pytorch_model, set_run_metadata
+from .plot_utils import (
     plot_field_visualization,
     plot_results_2panel,
     plot_scattering_validation,
     generate_animation
 )
-from physics import kdv
+from .physics import kdv
 
 
 def _fresh_eval_grid(config, device):
@@ -116,13 +119,7 @@ def validate_from_checkpoint(checkpoint_path, output_dir=None, generate_anim=Fal
         output_dir = os.path.dirname(checkpoint_path)
     os.makedirs(output_dir, exist_ok=True)
 
-    # Select device
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
+    device = get_device()
     print(f"Using {device} device.")
 
     # Create model and load weights
@@ -277,13 +274,7 @@ def validate_run(config=None, output_dir=None, generate_anim=False):
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # Select device
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
+    device = get_device()
     print(f"Using {device} device.")
 
     torch.manual_seed(training_config.seed)
@@ -422,6 +413,24 @@ def validate_run(config=None, output_dir=None, generate_anim=False):
                 f.write(f"{key}: {val:.6e}\n")
     print(f"\nMetrics saved to {metrics_path}")
 
+    # ---- MLflow: log params, training curves, final metrics, artifacts, model ----
+    with start_run(training_config):
+        history = result['metrics']
+        n_steps = len(history.get('L_total', []))
+        interval = max(getattr(training_config, 'plot_interval', 50), 1)
+        for step in range(0, n_steps, interval):
+            mlflow.log_metrics(
+                {k: vs[step] for k, vs in history.items() if step < len(vs)}, step=step)
+        mlflow.log_metrics({k: float(v) for k, v in metrics.items()
+                            if isinstance(v, (int, float, np.floating))})
+        mlflow.log_artifacts(output_dir)
+        pinn_desc = (
+            f"KdV PINN, {sd.Ns}-soliton (kappas={training_config.kappas}). Trained against "
+            "the analytic IST solution; validated by inverse-scattering recovery of the "
+            "discrete spectrum.")
+        register_pytorch_model(result['model'], "kdv_pinn", description=pinn_desc)
+        set_run_metadata(training_config, pinn_desc)
+
     return metrics
 
 
@@ -471,13 +480,7 @@ def validate_analytical_only(config=None, output_dir=None, generate_anim=False):
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # Select device
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
+    device = get_device()
     print(f"Using {device} device.")
 
     torch.manual_seed(training_config.seed)

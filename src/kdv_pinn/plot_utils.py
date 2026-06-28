@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
-from physics import kdv
+from .physics import kdv
 
 
 def _init_interactive_plot():
@@ -243,6 +243,7 @@ def plot_field_visualization(results, config, view='res', filename=None, suptitl
     if filename:
         plt.savefig(filename, dpi=150, bbox_inches='tight')
         print(f"Saved plot to {filename}")
+    return fig
 
 def load_equations(md_path):
     """Load equation labels from markdown file for plot titles.

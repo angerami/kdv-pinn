@@ -1,10 +1,11 @@
 """Training routines for KdV PINN."""
 import torch
 import matplotlib.pyplot as plt
-from sampling import sample_bulk, sample_boundary
-from physics import kdv, init_metrics
-from scattering import ScatteringData
-from plot_utils import _init_interactive_plot, _update_interactive_plot
+from .device import get_device
+from .sampling import sample_bulk, sample_boundary
+from .physics import kdv, init_metrics
+from .scattering import ScatteringData
+from .plot_utils import _init_interactive_plot, _update_interactive_plot
 
 
 def extract_means(results):
@@ -162,7 +163,7 @@ def train_pinn(model, config, device, start_epoch=0, optimizer_states=None, inte
             if interactive:
                 _update_interactive_plot(model, input_eval, config, metrics)
             if save_plot:
-                from plot_utils import plot_results
+                from .plot_utils import plot_results
                 model.eval()
                 with torch.no_grad():
                     fig = plot_results(model, input_eval, config, metrics, filename=save_plot)
@@ -176,20 +177,14 @@ def train_pinn(model, config, device, start_epoch=0, optimizer_states=None, inte
 def main():
     """Main training script (CLI entry point)."""
     import argparse
-    from models import KdV_pinn
-    from configuration import kdv_config, config_to_dict
+    from .models import KdV_pinn
+    from .configuration import kdv_config, config_to_dict
 
     parser = argparse.ArgumentParser(description='Train PINN for 1D KDV equation')
     parser.add_argument('--epochs', type=int, default=None, help='Number of training epochs')
     args = parser.parse_args()
 
-    # Select device
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
+    device = get_device()
     print(f"Using {device} device.")
 
     # Setup configuration

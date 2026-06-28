@@ -3,11 +3,12 @@ import argparse
 import os
 import torch
 from types import SimpleNamespace
-from models import KdV_pinn
-from train import train_pinn, pretrain
-from scattering import ScatteringData, SchrodingerSolver
-from configuration import kdv_config, config_to_dict, load_config
-from validation import (
+from kdv_pinn.models import KdV_pinn
+from kdv_pinn.train import train_pinn, pretrain
+from kdv_pinn.scattering import ScatteringData, SchrodingerSolver
+from kdv_pinn.configuration import kdv_config, config_to_dict, load_config
+from kdv_pinn.device import get_device
+from kdv_pinn.validation import (
     validate_run,
     validate_from_checkpoint,
     validate_analytical_only
@@ -187,12 +188,7 @@ Examples:
         return
 
     # Handle simple training mode (legacy behavior)
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
+    device = get_device()
     print(f"Using {device} device.")
 
     training_config = kdv_config
