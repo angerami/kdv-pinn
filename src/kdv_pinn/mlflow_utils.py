@@ -18,10 +18,13 @@ import mlflow
 
 
 def _resolve_tracking_uri() -> str:
-    """Respect MLFLOW_TRACKING_URI; otherwise use the main repo's mlflow.db.
+    """Respect MLFLOW_TRACKING_URI; otherwise use the mlflow.db at the root of the
+    repo you're running from.
 
-    Worktrees share the main repo's store: the main root is the parent of the
-    common git dir.
+    Resolved from the current working directory, not the package location, so each
+    project (e.g. kdv-pinn vs the kdv-foundation companion that imports it) logs to
+    its own store. Worktrees still share their main repo's store via the common
+    git dir.
     """
     env = os.environ.get("MLFLOW_TRACKING_URI")
     if env:
@@ -29,21 +32,22 @@ def _resolve_tracking_uri() -> str:
     try:
         common = subprocess.check_output(
             ["git", "rev-parse", "--git-common-dir"],
-            cwd=Path(__file__).parent, text=True, stderr=subprocess.DEVNULL,
+            text=True, stderr=subprocess.DEVNULL,
         ).strip()
         main_root = Path(common).resolve().parent
         return f"sqlite:///{main_root}/mlflow.db"
     except Exception:
-        return f"sqlite:///{Path(__file__).parent}/mlflow.db"
+        return f"sqlite:///{Path.cwd()}/mlflow.db"
 
 
 mlflow.set_tracking_uri(_resolve_tracking_uri())
 
 
 def get_git_info(repo_dir: str | Path | None = None) -> dict[str, str]:
-    # Resolve git relative to the package source by default, not the process cwd,
-    # so provenance is correct regardless of where the script is launched from.
-    cwd = str(repo_dir) if repo_dir else str(Path(__file__).parent)
+    # Resolve git from the working directory by default, so provenance reflects the
+    # project being run (kdv-pinn or the kdv-foundation companion), not this module's
+    # package location.
+    cwd = str(repo_dir) if repo_dir else None
     def run(cmd: list[str]) -> str:
         return subprocess.check_output(
             cmd, cwd=cwd, text=True, stderr=subprocess.DEVNULL,
